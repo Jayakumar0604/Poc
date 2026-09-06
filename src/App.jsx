@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 
+const KEY = 'endless-runner-high-score'
 const LANES = [-2.4, 0, 2.4]
 const SPEED = 14
+const readBest = () => Number(localStorage.getItem(KEY)) || 0
 
 function Camera() {
   const { camera } = useThree()
@@ -10,53 +12,124 @@ function Camera() {
   return null
 }
 
-function Scene({ setScore, setGameOver, gameOver }) {
-  const player = useRef()
-  const grid = useRef()
-  const obstacles = useMemo(
-    () => Array.from({ length: 9 }, (_, i) => ({ x: LANES[i % 3], z: -8 - i * 7 })),
-    [],
-  )
-  const obstacleRefs = useRef([])
-
+function Player({ playerRef }) {
   useEffect(() => {
     const move = (event) => {
-      if (!player.current) return
       const key = event.key.toLowerCase()
       if (!['a', 'd', 'arrowleft', 'arrowright'].includes(key)) return
       event.preventDefault()
       const direction = key === 'a' || key === 'arrowleft' ? -1 : 1
-      player.current.position.x = Math.max(
+      playerRef.current.position.x = Math.max(
         -2.8,
-        Math.min(2.8, player.current.position.x + direction * 2.4),
+        Math.min(2.8, playerRef.current.position.x + direction * 2.4),
       )
     }
     window.addEventListener('keydown', move)
     return () => window.removeEventListener('keydown', move)
-  }, [])
+  }, [playerRef])
+
+  return (
+    <mesh ref={playerRef} position={[0, 0, 0]}>
+      <boxGeometry args={[1.3, 1.3, 1.3]} />
+      <meshStandardMaterial color="#18d7ff" emissive="#064c68" />
+    </mesh>
+  )
+}
+
+function Obstacles({ playerRef, scoreRef, onGameOver, active }) {
+  const items = useMemo(
+    () => Array.from({ length: 9 }, (_, i) => ({ x: LANES[i % 3], z: -8 - i * 7 })),
+    [],
+  )
+  const refs = useRef([])
+  const hit = useRef(false)
 
   useFrame((_, delta) => {
-    if (gameOver) return
-    grid.current.position.z += delta * SPEED
-    if (grid.current.position.z > 0) grid.current.position.z = -20
-    setScore((value) => value + delta * 10)
+    if (!active || hit.current) return
 
-    obstacles.forEach((obstacle, index) => {
-      const mesh = obstacleRefs.current[index]
-      obstacle.z += delta * SPEED
-      if (obstacle.z > 5) {
-        obstacle.z = -65
-        obstacle.x = LANES[Math.floor(Math.random() * LANES.length)]
+    items.forEach((item, index) => {
+      const mesh = refs.current[index]
+      item.z += delta * SPEED
+      if (item.z > 5) {
+        item.z = -65
+        item.x = LANES[Math.floor(Math.random() * LANES.length)]
       }
-      mesh.position.set(obstacle.x, 0, obstacle.z)
+      mesh.position.set(item.x, 0, item.z)
 
       if (
-        Math.abs(obstacle.z) < 1.15 &&
-        Math.abs(obstacle.x - player.current.position.x) < 1.35
+        Math.abs(item.z) < 1.15 &&
+        Math.abs(item.x - playerRef.current.position.x) < 1.35
       ) {
-        setGameOver(true)
+        hit.current = true
+        onGameOver(scoreRef.current)
       }
     })
+  })
+
+  return items.map((item, index) => (
+    <mesh
+      key={index}
+      ref={(mesh) => (refs.current[index] = mesh)}
+      position={[item.x, 0, item.z]}
+    >
+      <boxGeometry args={[1.5, 1.5, 1.5]} />
+      <meshStandardMaterial color="#ff3158" emissive="#6e071c" />
+    </mesh>
+  ))
+}
+
+function Road({ active }) {
+  const markers = useMemo(
+    () => [-3.7, -1.2, 1.2, 3.7].flatMap((x) =>
+      Array.from({ length: 18 }, (_, i) => ({ x, z: -i * 4 - 4 })),
+    ),
+    [],
+  )
+  const refs = useRef([])
+
+  useFrame((_, delta) => {
+    if (!active) return
+    refs.current.forEach((marker) => {
+      marker.position.z += delta * SPEED
+      if (marker.position.z > 6) marker.position.z = -76
+    })
+  })
+
+  return (
+    <>
+      <mesh position={[0, -0.57, -35]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[8, 82]} />
+        <meshStandardMaterial color="#091322" />
+      </mesh>
+      {markers.map((marker, index) => (
+        <mesh
+          key={index}
+          ref={(mesh) => (refs.current[index] = mesh)}
+          position={[marker.x, -0.51, marker.z]}
+        >
+          <boxGeometry args={[marker.x % 1 ? 0.07 : 0.12, 0.03, 2.2]} />
+          <meshBasicMaterial color={Math.abs(marker.x) === 1.2 ? '#22d3ee' : '#155e75'} />
+        </mesh>
+      ))}
+    </>
+  )
+}
+
+function GameScene({ active, onScore, onGameOver }) {
+  const grid = useRef()
+  const player = useRef()
+  const score = useRef(0)
+  const lastScore = useRef(0)
+
+  useFrame((_, delta) => {
+    if (!active) return
+    grid.current.position.z += delta * SPEED
+    if (grid.current.position.z > 0) grid.current.position.z = -20
+    score.current += delta * 10
+    if (Math.floor(score.current) !== lastScore.current) {
+      lastScore.current = Math.floor(score.current)
+      onScore(lastScore.current)
+    }
   })
 
   return (
@@ -65,70 +138,124 @@ function Scene({ setScore, setGameOver, gameOver }) {
       <ambientLight intensity={1.5} />
       <directionalLight position={[2, 5, 4]} intensity={3} color="#8be9ff" />
       <gridHelper ref={grid} args={[60, 30, '#17617d', '#102c42']} position={[0, -0.55, -20]} />
-
-      <mesh ref={player} position={[0, 0, 0]}>
-        <boxGeometry args={[1.3, 1.3, 1.3]} />
-        <meshStandardMaterial color="#18d7ff" emissive="#064c68" />
-      </mesh>
-
-      {obstacles.map((obstacle, index) => (
-        <mesh
-          key={index}
-          ref={(mesh) => (obstacleRefs.current[index] = mesh)}
-          position={[obstacle.x, 0, obstacle.z]}
-        >
-          <boxGeometry args={[1.5, 1.5, 1.5]} />
-          <meshStandardMaterial color="#ff3158" emissive="#6e071c" />
-        </mesh>
-      ))}
+      <Road active={active} />
+      <Player playerRef={player} />
+      <Obstacles
+        active={active}
+        playerRef={player}
+        scoreRef={score}
+        onGameOver={onGameOver}
+      />
     </>
   )
 }
 
+function MainMenu({ onStart, onHighScore, onExit }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#070b1a] px-6 text-white">
+      <div className="w-full max-w-md border border-cyan-300/20 bg-slate-950/80 p-8 text-center shadow-2xl shadow-cyan-950/30 sm:p-10">
+        <p className="font-mono text-xs uppercase tracking-[0.35em] text-cyan-300">Neon Run</p>
+        <h1 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Endless Runner</h1>
+        <p className="mt-4 text-sm leading-6 text-slate-400">
+          Dodge the blocks and stay on the road as long as you can.
+        </p>
+        <div className="my-7 flex justify-center gap-2 text-xs text-slate-400">
+          <span className="border border-slate-700 px-2 py-1">A / D</span>
+          <span className="border border-slate-700 px-2 py-1">← / →</span>
+          <span className="py-1">to move</span>
+        </div>
+        <div className="space-y-3">
+          <button onClick={onStart} className="menu-button">Start Game</button>
+          <button onClick={onHighScore} className="menu-button">High Score</button>
+          <button onClick={onExit} className="menu-button">Exit Game</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function HighScore({ score, onBack }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#070b1a] text-center text-white">
+      <div className="p-6">
+        <p className="font-mono text-xs uppercase tracking-[0.3em] text-cyan-300">Best run</p>
+        <h1 className="mt-3 text-6xl font-black">{score}</h1>
+        <button onClick={onBack} className="menu-button mt-8">Back to Menu</button>
+      </div>
+    </div>
+  )
+}
+
+function UIOverlay({ score, gameOver, onRestart, onMenu }) {
+  return (
+    <div className="pointer-events-none absolute inset-0">
+      <div className="absolute left-5 top-5 border border-cyan-300/20 bg-slate-950/75 px-4 py-2 font-mono text-xs text-slate-400">
+        <span className="text-cyan-300">NEON RUN</span> · A/D or ←/→
+      </div>
+      <div className="absolute right-5 top-5 border border-cyan-300/30 bg-slate-950/75 px-4 py-2 font-mono text-sm text-cyan-200">
+        SCORE {score.toString().padStart(4, '0')}
+      </div>
+      {gameOver && (
+        <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-slate-950/65 p-6">
+          <div className="w-full max-w-sm border border-red-400/40 bg-slate-950 p-7 text-center text-white">
+            <p className="font-mono text-xs uppercase tracking-[0.3em] text-red-300">Run ended</p>
+            <h1 className="mt-3 text-4xl font-black">Game over</h1>
+            <p className="mt-3 text-slate-300">Final score: {score}</p>
+            <button onClick={onRestart} className="menu-button mt-6">Restart</button>
+            <button onClick={onMenu} className="mt-3 text-sm text-slate-400 underline">Menu</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function App() {
+  const [screen, setScreen] = useState('menu')
   const [score, setScore] = useState(0)
-  const [gameOver, setGameOver] = useState(false)
+  const [best, setBest] = useState(() => readBest())
   const [run, setRun] = useState(0)
 
-  const restart = () => {
+  const start = () => {
     setScore(0)
-    setGameOver(false)
     setRun((value) => value + 1)
+    setScreen('playing')
   }
+
+  const gameOver = (finalScore) => {
+    const final = Math.floor(finalScore)
+    const nextBest = Math.max(best, final)
+    setScore(final)
+    setBest(nextBest)
+    localStorage.setItem(KEY, nextBest)
+    setScreen('gameover')
+  }
+
+  if (screen === 'menu') {
+    return <MainMenu onStart={start} onHighScore={() => { setBest(readBest()); setScreen('highscore') }} onExit={() => setScreen('exit')} />
+  }
+
+  if (screen === 'highscore') return <HighScore score={best} onBack={() => setScreen('menu')} />
+  if (screen === 'exit') return <div className="flex min-h-screen items-center justify-center bg-black text-white">Thanks for playing</div>
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-[#070b1a]">
       <Canvas camera={{ position: [0, 3.5, 7], fov: 55 }}>
         <color attach="background" args={['#070b1a']} />
         <fog attach="fog" args={['#070b1a', 18, 65]} />
-        <Scene
+        <GameScene
           key={run}
-          gameOver={gameOver}
-          setScore={setScore}
-          setGameOver={setGameOver}
+          active={screen === 'playing'}
+          onScore={setScore}
+          onGameOver={gameOver}
         />
       </Canvas>
-
-      <div className="pointer-events-none absolute right-5 top-5 rounded border border-cyan-300/30 bg-slate-950/75 px-4 py-2 font-mono text-sm text-cyan-200">
-        SCORE {Math.floor(score).toString().padStart(4, '0')}
-      </div>
-
-      {gameOver && (
-        <div className="absolute inset-0 flex items-center justify-center bg-slate-950/65 p-6">
-          <div className="w-full max-w-sm border border-red-400/40 bg-slate-950 p-7 text-center text-white shadow-xl shadow-red-950/30">
-            <p className="font-mono text-xs uppercase tracking-[0.3em] text-red-300">Run ended</p>
-            <h1 className="mt-3 text-4xl font-black">Game over</h1>
-            <p className="mt-3 text-slate-300">Final score: {Math.floor(score)}</p>
-            <button
-              type="button"
-              onClick={restart}
-              className="mt-6 w-full bg-cyan-400 px-4 py-3 font-bold text-slate-950 transition hover:bg-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-950"
-            >
-              Restart
-            </button>
-          </div>
-        </div>
-      )}
+      <UIOverlay
+        score={score}
+        gameOver={screen === 'gameover'}
+        onRestart={start}
+        onMenu={() => setScreen('menu')}
+      />
     </main>
   )
 }

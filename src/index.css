@@ -19,3 +19,7 @@ body {
 button {
   cursor: pointer;
 }
+
+.menu-button {
+  @apply w-full border border-cyan-300/40 bg-cyan-400 px-4 py-3 font-bold text-slate-950 transition hover:bg-cyan-300;
+}
