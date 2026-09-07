@@ -86,31 +86,31 @@ function Mouse({ playerRef, active }) {
 
   return (
     <group ref={playerRef} position={[0, 0, 0]} scale={[0.4, 0.4, 0.4]}>
-      <mesh scale={[1, 1, 1.5]}>
+      <mesh scale={[1, 1, 1.5]} castShadow receiveShadow>
         <sphereGeometry args={[0.2, 16, 16]} />
         <meshStandardMaterial color="#777" flatShading />
       </mesh>
-      <mesh position={[-0.12, 0.16, -0.08]} rotation={[Math.PI / 2, 0, 0]}>
+      <mesh position={[-0.12, 0.16, -0.08]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
         <cylinderGeometry args={[0.1, 0.1, 0.02, 16]} />
         <meshStandardMaterial color="#ff9bb5" flatShading />
       </mesh>
-      <mesh position={[0.12, 0.16, -0.08]} rotation={[Math.PI / 2, 0, 0]}>
+      <mesh position={[0.12, 0.16, -0.08]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
         <cylinderGeometry args={[0.1, 0.1, 0.02, 16]} />
         <meshStandardMaterial color="#ff9bb5" flatShading />
       </mesh>
-      <mesh position={[-0.08, 0.08, -0.27]}>
+      <mesh position={[-0.08, 0.08, -0.27]} castShadow>
         <sphereGeometry args={[0.025, 8, 8]} />
         <meshStandardMaterial color="#050505" flatShading />
       </mesh>
-      <mesh position={[0.08, 0.08, -0.27]}>
+      <mesh position={[0.08, 0.08, -0.27]} castShadow>
         <sphereGeometry args={[0.025, 8, 8]} />
         <meshStandardMaterial color="#050505" flatShading />
       </mesh>
-      <mesh position={[0, 0, -0.32]}>
+      <mesh position={[0, 0, -0.32]} castShadow>
         <sphereGeometry args={[0.035, 8, 8]} />
         <meshStandardMaterial color="#050505" flatShading />
       </mesh>
-      <mesh position={[0, 0, 0.32]} rotation={[Math.PI / 2, 0, 0]}>
+      <mesh position={[0, 0, 0.32]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
         <cylinderGeometry args={[0.015, 0.015, 0.6]} />
         <meshStandardMaterial color="#555" flatShading />
       </mesh>
@@ -142,38 +142,36 @@ function Cat({ catRef, playerRef, active, isCaught }) {
 
   return (
     <group ref={catRef} position={[0, 0, 3]}>
-      <mesh position={[0, 0, 0.2]}>
-        <boxGeometry args={[1.8, 1.2, 1.8]} />
-        <meshStandardMaterial color="#f28c28" flatShading />
+      <mesh position={[0, 0, 0.15]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.3, 0.35, 1.2, 6]} />
+        <meshStandardMaterial color="#171923" flatShading />
       </mesh>
-      <mesh position={[0, 0.95, -0.25]}>
-        <sphereGeometry args={[0.5, 16, 16]} />
-        <meshStandardMaterial color="#607d9b" flatShading />
+      <mesh position={[0, 0.42, -0.5]} castShadow receiveShadow>
+        <boxGeometry args={[0.35, 0.35, 0.35]} />
+        <meshStandardMaterial color="#252936" flatShading />
       </mesh>
-      <mesh position={[-0.3, 1.38, -0.25]}>
-        <coneGeometry args={[0.15, 0.3, 4]} />
-        <meshStandardMaterial color="#607d9b" flatShading />
+      <mesh position={[-0.1, 0.65, -0.5]} castShadow>
+        <coneGeometry args={[0.1, 0.25, 4]} />
+        <meshStandardMaterial color="#252936" flatShading />
       </mesh>
-      <mesh position={[0.3, 1.38, -0.25]}>
-        <coneGeometry args={[0.15, 0.3, 4]} />
-        <meshStandardMaterial color="#607d9b" flatShading />
+      <mesh position={[0.1, 0.65, -0.5]} castShadow>
+        <coneGeometry args={[0.1, 0.25, 4]} />
+        <meshStandardMaterial color="#252936" flatShading />
       </mesh>
-      <mesh position={[-0.18, 1.02, -0.68]}>
-        <sphereGeometry args={[0.07, 8, 8]} />
-        <meshStandardMaterial color="#baff39" emissive="#668800" flatShading />
+      <mesh position={[-0.1, 0.47, -0.69]} rotation={[0, 0, -0.2]} castShadow>
+        <boxGeometry args={[0.08, 0.05, 0.05]} />
+        <meshStandardMaterial color="#aaff00" emissive="#aaff00" emissiveIntensity={2} flatShading />
       </mesh>
-      <mesh position={[0.18, 1.02, -0.68]}>
-        <sphereGeometry args={[0.07, 8, 8]} />
-        <meshStandardMaterial color="#baff39" emissive="#668800" flatShading />
+      <mesh position={[0.1, 0.47, -0.69]} rotation={[0, 0, 0.2]} castShadow>
+        <boxGeometry args={[0.08, 0.05, 0.05]} />
+        <meshStandardMaterial color="#aaff00" emissive="#aaff00" emissiveIntensity={2} flatShading />
       </mesh>
-      <mesh position={[-0.65, 0.95, -0.52]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.01, 0.01, 0.7]} />
-        <meshStandardMaterial color="#111" flatShading />
-      </mesh>
-      <mesh position={[0.65, 0.95, -0.52]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.01, 0.01, 0.7]} />
-        <meshStandardMaterial color="#111" flatShading />
-      </mesh>
+      {[-0.22, 0.22].flatMap((x) => [-0.15, 0.45].map((z) => (
+        <mesh key={`${x}-${z}`} position={[x, -0.38, z]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.08, 0.08, 0.35, 6]} />
+          <meshStandardMaterial color="#171923" flatShading />
+        </mesh>
+      )))}
     </group>
   )
 }
@@ -183,21 +181,21 @@ function Obstacle({ item, obstacleRef }) {
     <group ref={obstacleRef} position={[item.x, item.y, item.z]}>
       {item.type === 'ground' ? (
         <>
-          <mesh>
+          <mesh castShadow receiveShadow>
             <boxGeometry args={[1, 0.05, 1.2]} />
             <meshStandardMaterial color="#8b5a2b" flatShading />
           </mesh>
-          <mesh position={[0, 0.08, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <mesh position={[0, 0.08, 0]} rotation={[0, 0, Math.PI / 2]} castShadow receiveShadow>
             <cylinderGeometry args={[0.03, 0.03, 0.9]} />
             <meshStandardMaterial color="#c0c0c0" flatShading />
           </mesh>
-          <mesh position={[0, 0.08, 0]}>
+          <mesh position={[0, 0.08, 0]} castShadow receiveShadow>
             <boxGeometry args={[0.14, 0.06, 0.14]} />
             <meshStandardMaterial color="#ffcc00" flatShading />
           </mesh>
         </>
       ) : (
-        <mesh>
+        <mesh castShadow receiveShadow>
           <cylinderGeometry args={[0.25, 0.25, 2.5, 16]} />
           <meshStandardMaterial color="#5b351f" flatShading />
         </mesh>
@@ -287,7 +285,7 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, onCollect, on
   })
 
   return (
-    <mesh ref={ref} position={[coin.x, coin.y, coin.z]} rotation={[Math.PI / 2, 0, 0]}>
+    <mesh ref={ref} position={[coin.x, coin.y, coin.z]} rotation={[Math.PI / 2, 0, 0]} castShadow>
       <cylinderGeometry args={[0.3, 0.3, 0.15, 3]} />
       <meshStandardMaterial color="#ffcc00" flatShading />
     </mesh>
@@ -381,21 +379,21 @@ function Environment({ active, speedRef }) {
 
   return (
     <>
-      <mesh position={[0, -0.57, -35]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh position={[0, -0.57, -35]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[8, 82]} />
         <meshStandardMaterial color="#6b3e26" flatShading />
       </mesh>
       {planks.map((plank, index) => (
-        <mesh key={index} ref={(mesh) => (refs.current[index] = mesh)} position={[0, -0.53, plank.z]}>
+        <mesh key={index} ref={(mesh) => (refs.current[index] = mesh)} position={[0, -0.53, plank.z]} castShadow receiveShadow>
           <boxGeometry args={[7.8, 0.02, 0.06]} />
           <meshBasicMaterial color="#a66a43" />
         </mesh>
       ))}
-      <mesh position={[-4, -0.25, -35]}>
+      <mesh position={[-4, -0.25, -35]} castShadow receiveShadow>
         <boxGeometry args={[0.2, 0.6, 82]} />
         <meshStandardMaterial color="#f4eee5" flatShading />
       </mesh>
-      <mesh position={[4, -0.25, -35]}>
+      <mesh position={[4, -0.25, -35]} castShadow receiveShadow>
         <boxGeometry args={[0.2, 0.6, 82]} />
         <meshStandardMaterial color="#f4eee5" flatShading />
       </mesh>
@@ -442,8 +440,17 @@ function GameScene({ active, isPaused, isCaught, baseSpeed, maxSpeed, onScore, o
   return (
     <>
       <Camera />
-      <ambientLight intensity={1.5} />
-      <directionalLight position={[2, 5, 4]} intensity={3} color="#8be9ff" />
+      <ambientLight intensity={0.9} />
+      <directionalLight
+        position={[10, 20, 10]}
+        intensity={1.5}
+        castShadow
+        shadow-mapSize={[1024, 1024]}
+        shadow-camera-left={-10}
+        shadow-camera-right={10}
+        shadow-camera-top={15}
+        shadow-camera-bottom={-15}
+      />
       <Environment active={active && !isPaused && !isCaught} speedRef={currentSpeed} />
       <Mouse playerRef={player} active={active && !isPaused && !isCaught} />
       <Cat catRef={cat} playerRef={player} active={active && !isPaused} isCaught={isCaught} />
@@ -627,9 +634,9 @@ export default function App() {
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-[#070b1a]">
-      <Canvas camera={{ position: [0, 3.5, 7], fov: 55 }}>
-        <color attach="background" args={['#070b1a']} />
-        <fog attach="fog" args={['#070b1a', 18, 65]} />
+      <Canvas shadows camera={{ position: [0, 3.5, 7], fov: 55 }}>
+        <color attach="background" args={['#1a1a2e']} />
+        <fog attach="fog" args={['#1a1a2e', 15, 60]} />
         <GameScene
           key={run}
           active={screen === 'playing'}
