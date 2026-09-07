@@ -86,20 +86,32 @@ function Mouse({ playerRef, active }) {
 
   return (
     <group ref={playerRef} position={[0, 0, 0]} scale={[0.4, 0.4, 0.4]}>
-      <mesh>
-        <boxGeometry args={[1.3, 1, 1.3]} />
+      <mesh scale={[1, 1, 1.5]}>
+        <sphereGeometry args={[0.2, 16, 16]} />
         <meshStandardMaterial color="#777" flatShading />
       </mesh>
-      <mesh position={[-0.42, 0.65, 0]}>
-        <boxGeometry args={[0.3, 0.3, 0.3]} />
+      <mesh position={[-0.12, 0.16, -0.08]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.1, 0.1, 0.02, 16]} />
         <meshStandardMaterial color="#ff9bb5" flatShading />
       </mesh>
-      <mesh position={[0.42, 0.65, 0]}>
-        <boxGeometry args={[0.3, 0.3, 0.3]} />
+      <mesh position={[0.12, 0.16, -0.08]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.1, 0.1, 0.02, 16]} />
         <meshStandardMaterial color="#ff9bb5" flatShading />
       </mesh>
-      <mesh position={[0, -0.15, -0.85]}>
-        <boxGeometry args={[0.15, 0.15, 1.2]} />
+      <mesh position={[-0.08, 0.08, -0.27]}>
+        <sphereGeometry args={[0.025, 8, 8]} />
+        <meshStandardMaterial color="#050505" flatShading />
+      </mesh>
+      <mesh position={[0.08, 0.08, -0.27]}>
+        <sphereGeometry args={[0.025, 8, 8]} />
+        <meshStandardMaterial color="#050505" flatShading />
+      </mesh>
+      <mesh position={[0, 0, -0.32]}>
+        <sphereGeometry args={[0.035, 8, 8]} />
+        <meshStandardMaterial color="#050505" flatShading />
+      </mesh>
+      <mesh position={[0, 0, 0.32]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.015, 0.015, 0.6]} />
         <meshStandardMaterial color="#555" flatShading />
       </mesh>
     </group>
@@ -130,21 +142,37 @@ function Cat({ catRef, playerRef, active, isCaught }) {
 
   return (
     <group ref={catRef} position={[0, 0, 3]}>
-      <mesh>
+      <mesh position={[0, 0, 0.2]}>
         <boxGeometry args={[1.8, 1.2, 1.8]} />
         <meshStandardMaterial color="#f28c28" flatShading />
       </mesh>
-      <mesh position={[0, 0.9, -0.1]}>
-        <boxGeometry args={[1.2, 0.9, 1.1]} />
-        <meshStandardMaterial color="#fff4dc" flatShading />
+      <mesh position={[0, 0.95, -0.25]}>
+        <sphereGeometry args={[0.5, 16, 16]} />
+        <meshStandardMaterial color="#607d9b" flatShading />
       </mesh>
-      <mesh position={[-0.42, 1.45, -0.1]} rotation={[0, 0, -0.4]}>
-        <boxGeometry args={[0.3, 0.7, 0.3]} />
-        <meshStandardMaterial color="#f28c28" flatShading />
+      <mesh position={[-0.3, 1.38, -0.25]}>
+        <coneGeometry args={[0.15, 0.3, 4]} />
+        <meshStandardMaterial color="#607d9b" flatShading />
       </mesh>
-      <mesh position={[0.42, 1.45, -0.1]} rotation={[0, 0, 0.4]}>
-        <boxGeometry args={[0.3, 0.7, 0.3]} />
-        <meshStandardMaterial color="#f28c28" flatShading />
+      <mesh position={[0.3, 1.38, -0.25]}>
+        <coneGeometry args={[0.15, 0.3, 4]} />
+        <meshStandardMaterial color="#607d9b" flatShading />
+      </mesh>
+      <mesh position={[-0.18, 1.02, -0.68]}>
+        <sphereGeometry args={[0.07, 8, 8]} />
+        <meshStandardMaterial color="#baff39" emissive="#668800" flatShading />
+      </mesh>
+      <mesh position={[0.18, 1.02, -0.68]}>
+        <sphereGeometry args={[0.07, 8, 8]} />
+        <meshStandardMaterial color="#baff39" emissive="#668800" flatShading />
+      </mesh>
+      <mesh position={[-0.65, 0.95, -0.52]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.01, 0.01, 0.7]} />
+        <meshStandardMaterial color="#111" flatShading />
+      </mesh>
+      <mesh position={[0.65, 0.95, -0.52]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.01, 0.01, 0.7]} />
+        <meshStandardMaterial color="#111" flatShading />
       </mesh>
     </group>
   )
@@ -156,18 +184,22 @@ function Obstacle({ item, obstacleRef }) {
       {item.type === 'ground' ? (
         <>
           <mesh>
-            <boxGeometry args={[1.4, 0.2, 1.1]} />
+            <boxGeometry args={[1, 0.05, 1.2]} />
             <meshStandardMaterial color="#8b5a2b" flatShading />
           </mesh>
-          <mesh position={[0, 0.22, 0]} rotation={[0, 0, Math.PI / 2]}>
-            <cylinderGeometry args={[0.05, 0.05, 1.1, 8]} />
+          <mesh position={[0, 0.08, 0]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.03, 0.03, 0.9]} />
             <meshStandardMaterial color="#c0c0c0" flatShading />
+          </mesh>
+          <mesh position={[0, 0.08, 0]}>
+            <boxGeometry args={[0.14, 0.06, 0.14]} />
+            <meshStandardMaterial color="#ffcc00" flatShading />
           </mesh>
         </>
       ) : (
         <mesh>
-          <boxGeometry args={[2, 0.22, 0.6]} />
-          <meshStandardMaterial color="#7b4b2a" flatShading />
+          <cylinderGeometry args={[0.25, 0.25, 2.5, 16]} />
+          <meshStandardMaterial color="#5b351f" flatShading />
         </mesh>
       )}
     </group>
@@ -178,7 +210,7 @@ function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
   const items = useMemo(
     () => Array.from({ length: 9 }, (_, i) => {
       const type = i % 2 ? 'overhead' : 'ground'
-      return { type, height: type === 'overhead' ? 1.3 : 0.4, x: LANES[i % 3], y: type === 'overhead' ? 1.15 : 0.1, z: -8 - i * 7 }
+      return { type, height: type === 'overhead' ? 2.5 : 0.4, x: LANES[i % 3], y: type === 'overhead' ? 2.25 : 0.1, z: -8 - i * 7 }
     }),
     [],
   )
@@ -199,8 +231,8 @@ function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
         item.z = -(spawnDistance + Math.random() * 16)
         item.x = LANES[Math.floor(Math.random() * LANES.length)]
         item.type = Math.random() < 0.5 ? 'overhead' : 'ground'
-        item.height = item.type === 'overhead' ? 1.3 : 0.4
-        item.y = item.type === 'overhead' ? 1.15 : 0.1
+        item.height = item.type === 'overhead' ? 2.5 : 0.4
+        item.y = item.type === 'overhead' ? 2.25 : 0.1
       }
       mesh.position.set(item.x, item.y, item.z)
     })
