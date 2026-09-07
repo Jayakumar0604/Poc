@@ -3,9 +3,6 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 
 const KEY = 'endless-runner-high-score'
 const LANES = [-2.4, 0, 2.4]
-const OBSTACLE_SIZE = 1.1
-const OBSTACLE_COLORS = ['#ff0055', '#00ffcc', '#ffaa00', '#aa00ff']
-const randomObstacleColor = () => OBSTACLE_COLORS[Math.floor(Math.random() * OBSTACLE_COLORS.length)]
 const DIFFICULTIES = {
   Easy: { baseSpeed: 3, maxSpeed: 12 },
   Medium: { baseSpeed: 6, maxSpeed: 18 },
@@ -22,16 +19,15 @@ function Camera() {
   return null
 }
 
-function Player({ playerRef, active }) {
+function Mouse({ playerRef, active }) {
   const velocity = useRef(0)
   const grounded = useRef(true)
   const ducking = useRef(false)
   const setDuck = useCallback((value) => {
     const player = playerRef.current
     if (!player) return
-    const scaleY = value ? 0.1 : 1
-    player.scale.set(1, scaleY, 1)
-    player.position.y = -(1.3 / 2) * (1 - scaleY)
+    player.scale.set(0.4, value ? 0.2 : 0.4, 0.4)
+    player.position.y = value ? -0.1 : 0
   }, [playerRef])
 
   useEffect(() => {
@@ -48,18 +44,15 @@ function Player({ playerRef, active }) {
         grounded.current = false
         velocity.current = 9
         playerRef.current.position.y = 0
-        playerRef.current.scale.y = 1
+        setDuck(false)
       }
       if (duck && grounded.current) {
         ducking.current = true
         setDuck(true)
       }
-      if (key === 'a' || key === 'd' || key === 'arrowleft' || key === 'arrowright') {
+      if (['a', 'd', 'arrowleft', 'arrowright'].includes(key)) {
         const direction = key === 'a' || key === 'arrowleft' ? -1 : 1
-        playerRef.current.position.x = Math.max(
-          -2.8,
-          Math.min(2.8, playerRef.current.position.x + direction * 2.4),
-        )
+        playerRef.current.position.x = Math.max(-2.8, Math.min(2.8, playerRef.current.position.x + direction * 2.4))
       }
     }
     const stopDuck = (event) => {
@@ -79,7 +72,6 @@ function Player({ playerRef, active }) {
   useFrame((_, delta) => {
     if (!active || !playerRef.current) return
     const player = playerRef.current
-
     if (!grounded.current) {
       velocity.current -= 22 * delta
       player.position.y += velocity.current * delta
@@ -89,15 +81,96 @@ function Player({ playerRef, active }) {
         grounded.current = true
       }
     }
-
     if (grounded.current) setDuck(ducking.current)
   })
 
   return (
-    <mesh ref={playerRef} position={[0, 0, 0]}>
-      <boxGeometry args={[1.3, 1.3, 1.3]} />
-      <meshStandardMaterial color="#18d7ff" emissive="#064c68" />
-    </mesh>
+    <group ref={playerRef} position={[0, 0, 0]} scale={[0.4, 0.4, 0.4]}>
+      <mesh>
+        <boxGeometry args={[1.3, 1, 1.3]} />
+        <meshStandardMaterial color="#777" flatShading />
+      </mesh>
+      <mesh position={[-0.42, 0.65, 0]}>
+        <boxGeometry args={[0.3, 0.3, 0.3]} />
+        <meshStandardMaterial color="#ff9bb5" flatShading />
+      </mesh>
+      <mesh position={[0.42, 0.65, 0]}>
+        <boxGeometry args={[0.3, 0.3, 0.3]} />
+        <meshStandardMaterial color="#ff9bb5" flatShading />
+      </mesh>
+      <mesh position={[0, -0.15, -0.85]}>
+        <boxGeometry args={[0.15, 0.15, 1.2]} />
+        <meshStandardMaterial color="#555" flatShading />
+      </mesh>
+    </group>
+  )
+}
+
+function Cat({ catRef, playerRef, active, isCaught }) {
+  const startTime = useRef(null)
+
+  useFrame((state, delta) => {
+    if (!active || !catRef.current || !playerRef.current) return
+    if (startTime.current === null) startTime.current = state.clock.elapsedTime
+
+    const mouse = playerRef.current.position
+    const elapsed = state.clock.elapsedTime - startTime.current
+    const cat = catRef.current
+
+    if (isCaught) {
+      cat.visible = true
+      cat.position.lerp(mouse, Math.min(1, delta * 12))
+    } else if (elapsed < 3) {
+      cat.visible = true
+      cat.position.set(mouse.x, 0, mouse.z + 3)
+    } else {
+      cat.visible = false
+    }
+  })
+
+  return (
+    <group ref={catRef} position={[0, 0, 3]}>
+      <mesh>
+        <boxGeometry args={[1.8, 1.2, 1.8]} />
+        <meshStandardMaterial color="#f28c28" flatShading />
+      </mesh>
+      <mesh position={[0, 0.9, -0.1]}>
+        <boxGeometry args={[1.2, 0.9, 1.1]} />
+        <meshStandardMaterial color="#fff4dc" flatShading />
+      </mesh>
+      <mesh position={[-0.42, 1.45, -0.1]} rotation={[0, 0, -0.4]}>
+        <boxGeometry args={[0.3, 0.7, 0.3]} />
+        <meshStandardMaterial color="#f28c28" flatShading />
+      </mesh>
+      <mesh position={[0.42, 1.45, -0.1]} rotation={[0, 0, 0.4]}>
+        <boxGeometry args={[0.3, 0.7, 0.3]} />
+        <meshStandardMaterial color="#f28c28" flatShading />
+      </mesh>
+    </group>
+  )
+}
+
+function Obstacle({ item, obstacleRef }) {
+  return (
+    <group ref={obstacleRef} position={[item.x, item.y, item.z]}>
+      {item.type === 'ground' ? (
+        <>
+          <mesh>
+            <boxGeometry args={[1.4, 0.2, 1.1]} />
+            <meshStandardMaterial color="#8b5a2b" flatShading />
+          </mesh>
+          <mesh position={[0, 0.22, 0]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.05, 0.05, 1.1, 8]} />
+            <meshStandardMaterial color="#c0c0c0" flatShading />
+          </mesh>
+        </>
+      ) : (
+        <mesh>
+          <boxGeometry args={[2, 0.22, 0.6]} />
+          <meshStandardMaterial color="#7b4b2a" flatShading />
+        </mesh>
+      )}
+    </group>
   )
 }
 
@@ -105,7 +178,7 @@ function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
   const items = useMemo(
     () => Array.from({ length: 9 }, (_, i) => {
       const type = i % 2 ? 'overhead' : 'ground'
-      return { type, color: randomObstacleColor(), x: LANES[i % 3], y: type === 'overhead' ? 1.15 : 0, z: -8 - i * 7 }
+      return { type, height: type === 'overhead' ? 1.3 : 0.4, x: LANES[i % 3], y: type === 'overhead' ? 1.15 : 0.1, z: -8 - i * 7 }
     }),
     [],
   )
@@ -126,27 +199,23 @@ function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
         item.z = -(spawnDistance + Math.random() * 16)
         item.x = LANES[Math.floor(Math.random() * LANES.length)]
         item.type = Math.random() < 0.5 ? 'overhead' : 'ground'
-        item.color = randomObstacleColor()
-        item.y = item.type === 'overhead' ? 1.15 : 0
+        item.height = item.type === 'overhead' ? 1.3 : 0.4
+        item.y = item.type === 'overhead' ? 1.15 : 0.1
       }
       mesh.position.set(item.x, item.y, item.z)
-      mesh.material.color.set(item.color)
     })
   })
 
   return items.map((item, index) => (
-    <mesh
+    <Obstacle
       key={index}
-      ref={(mesh) => (refs.current[index] = mesh)}
-      position={[item.x, item.y, item.z]}
-    >
-      <boxGeometry args={[OBSTACLE_SIZE, OBSTACLE_SIZE, OBSTACLE_SIZE]} />
-      <meshStandardMaterial color={item.color} emissive="#6e071c" />
-    </mesh>
+      item={item}
+      obstacleRef={(mesh) => (refs.current[index] = mesh)}
+    />
   ))
 }
 
-function Coin({ coin, active, playerRef, speedRef, obstaclesRef, onCollect, onRemove, onMove }) {
+function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, onCollect, onRemove, onMove }) {
   const ref = useRef()
   const z = useRef(coin.z)
   const collected = useRef(false)
@@ -187,12 +256,8 @@ function Coin({ coin, active, playerRef, speedRef, obstaclesRef, onCollect, onRe
 
   return (
     <mesh ref={ref} position={[coin.x, coin.y, coin.z]} rotation={[Math.PI / 2, 0, 0]}>
-      {coin.superCoin ? (
-        <cylinderGeometry args={[0.5, 0.5, 0.2]} />
-      ) : (
-        <cylinderGeometry args={[0.3, 0.3, 0.1]} />
-      )}
-      <meshStandardMaterial color={coin.superCoin ? 'gold' : 'yellow'} emissive="#a66b00" />
+      <cylinderGeometry args={[0.3, 0.3, 0.15, 3]} />
+      <meshStandardMaterial color="#ffcc00" flatShading />
     </mesh>
   )
 }
@@ -253,7 +318,7 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, onCoin }) {
   })
 
   return coins.map((coin) => (
-    <Coin
+    <Cheese
       key={coin.id}
       coin={coin}
       active={active}
@@ -267,20 +332,18 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, onCoin }) {
   ))
 }
 
-function Road({ active, speedRef }) {
-  const markers = useMemo(
-    () => [-3.7, -1.2, 1.2, 3.7].flatMap((x) =>
-      Array.from({ length: 18 }, (_, i) => ({ x, z: -i * 4 - 4 })),
-    ),
+function Environment({ active, speedRef }) {
+  const planks = useMemo(
+    () => Array.from({ length: 20 }, (_, i) => ({ z: -i * 4 - 4 })),
     [],
   )
   const refs = useRef([])
 
   useFrame((_, delta) => {
     if (!active) return
-    refs.current.forEach((marker) => {
-      marker.position.z += delta * speedRef.current
-      if (marker.position.z > 6) marker.position.z = -76
+    refs.current.forEach((plank) => {
+      plank.position.z += delta * speedRef.current
+      if (plank.position.z > 6) plank.position.z = -76
     })
   })
 
@@ -288,25 +351,29 @@ function Road({ active, speedRef }) {
     <>
       <mesh position={[0, -0.57, -35]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[8, 82]} />
-        <meshStandardMaterial color="#091322" />
+        <meshStandardMaterial color="#6b3e26" flatShading />
       </mesh>
-      {markers.map((marker, index) => (
-        <mesh
-          key={index}
-          ref={(mesh) => (refs.current[index] = mesh)}
-          position={[marker.x, -0.51, marker.z]}
-        >
-          <boxGeometry args={[marker.x % 1 ? 0.07 : 0.12, 0.03, 2.2]} />
-          <meshBasicMaterial color={Math.abs(marker.x) === 1.2 ? '#22d3ee' : '#155e75'} />
+      {planks.map((plank, index) => (
+        <mesh key={index} ref={(mesh) => (refs.current[index] = mesh)} position={[0, -0.53, plank.z]}>
+          <boxGeometry args={[7.8, 0.02, 0.06]} />
+          <meshBasicMaterial color="#a66a43" />
         </mesh>
       ))}
+      <mesh position={[-4, -0.25, -35]}>
+        <boxGeometry args={[0.2, 0.6, 82]} />
+        <meshStandardMaterial color="#f4eee5" flatShading />
+      </mesh>
+      <mesh position={[4, -0.25, -35]}>
+        <boxGeometry args={[0.2, 0.6, 82]} />
+        <meshStandardMaterial color="#f4eee5" flatShading />
+      </mesh>
     </>
   )
 }
 
-function GameScene({ active, baseSpeed, maxSpeed, onScore, onGameOver, onCoin }) {
-  const grid = useRef()
+function GameScene({ active, isPaused, isCaught, baseSpeed, maxSpeed, onScore, onCaught, onCoin }) {
   const player = useRef()
+  const cat = useRef()
   const obstacles = useRef([])
   const score = useRef(0)
   const lastScore = useRef(0)
@@ -314,34 +381,27 @@ function GameScene({ active, baseSpeed, maxSpeed, onScore, onGameOver, onCoin })
   const ended = useRef(false)
 
   useFrame((_, delta) => {
+    if (isPaused || isCaught) return
     if (!active || ended.current) return
     currentSpeed.current = Math.min(currentSpeed.current + delta * 0.4, maxSpeed)
-    grid.current.position.z += delta * currentSpeed.current
-    if (grid.current.position.z > 0) grid.current.position.z = -20
     score.current += delta * currentSpeed.current
     if (Math.floor(score.current) !== lastScore.current) {
       lastScore.current = Math.floor(score.current)
       onScore(lastScore.current)
     }
 
-    const playerX = player.current.position.x
-    const playerZ = player.current.position.z
-    const isDucking = player.current.scale.y < 1
-    const currentHeight = isDucking ? 0.25 : 1.0
-    const playerTop = player.current.position.y + currentHeight / 2
+    const isDucking = player.current.scale.y < 0.4
 
     for (const obstacle of obstacles.current) {
-      const obsX = obstacle.x
-      const obsZ = obstacle.z
-      const obstacleBottom = obstacle.y - OBSTACLE_SIZE / 2
-      const obstacleTop = obstacle.y + OBSTACLE_SIZE / 2
-      const hitX = Math.abs(playerX - obsX) < 1
-      const hitZ = Math.abs(playerZ - obsZ) < 1
-      const hitY = playerTop > obstacleBottom && player.current.position.y - currentHeight / 2 < obstacleTop
+      const hitXZ =
+        Math.abs(player.current.position.x - obstacle.x) < 0.8 &&
+        Math.abs(player.current.position.z - obstacle.z) < 0.8
+      const hitGround = obstacle.type === 'ground' && hitXZ && player.current.position.y < obstacle.height
+      const hitOverhead = obstacle.type === 'overhead' && hitXZ && !isDucking
 
-      if (hitX && hitZ && hitY) {
+      if (hitGround || hitOverhead) {
         ended.current = true
-        onGameOver(score.current)
+        onCaught(score.current)
         break
       }
     }
@@ -352,17 +412,17 @@ function GameScene({ active, baseSpeed, maxSpeed, onScore, onGameOver, onCoin })
       <Camera />
       <ambientLight intensity={1.5} />
       <directionalLight position={[2, 5, 4]} intensity={3} color="#8be9ff" />
-      <gridHelper ref={grid} args={[60, 30, '#17617d', '#102c42']} position={[0, -0.55, -20]} />
-      <Road active={active} speedRef={currentSpeed} />
-      <Player playerRef={player} active={active} />
+      <Environment active={active && !isPaused && !isCaught} speedRef={currentSpeed} />
+      <Mouse playerRef={player} active={active && !isPaused && !isCaught} />
+      <Cat catRef={cat} playerRef={player} active={active && !isPaused} isCaught={isCaught} />
       <Obstacles
-        active={active}
+        active={active && !isPaused}
         baseSpeed={baseSpeed}
         obstaclesRef={obstacles}
         speedRef={currentSpeed}
       />
       <CoinSpawner
-        active={active}
+        active={active && !isPaused && !isCaught}
         speedRef={currentSpeed}
         obstaclesRef={obstacles}
         playerRef={player}
@@ -442,7 +502,7 @@ function HighScore({ score, onBack }) {
   )
 }
 
-function UIOverlay({ score, coinCount, gameOver, onRestart, onMenu }) {
+function UIOverlay({ score, coinCount, isPaused, gameOver, onRestart, onMenu, onResume }) {
   return (
     <div className="pointer-events-none absolute inset-0">
       <div className="absolute left-5 top-5 border border-cyan-300/20 bg-slate-950/75 px-4 py-2 font-mono text-xs text-slate-400">
@@ -452,6 +512,15 @@ function UIOverlay({ score, coinCount, gameOver, onRestart, onMenu }) {
         <span className="text-cyan-200">SCORE {score.toString().padStart(4, '0')}</span>
         <span className="text-yellow-300">COINS: {coinCount}</span>
       </div>
+      {isPaused && !gameOver && (
+        <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-slate-950/70 p-6">
+          <div className="w-full max-w-sm border border-cyan-300/40 bg-slate-950 p-7 text-center text-white">
+            <p className="font-mono text-xs uppercase tracking-[0.3em] text-cyan-300">Game paused</p>
+            <h1 className="mt-3 text-4xl font-black">PAUSED</h1>
+            <button onClick={onResume} className="menu-button mt-6">Resume</button>
+          </div>
+        </div>
+      )}
       {gameOver && (
         <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-slate-950/65 p-6">
           <div className="w-full max-w-sm border border-red-400/40 bg-slate-950 p-7 text-center text-white">
@@ -471,12 +540,28 @@ export default function App() {
   const [screen, setScreen] = useState('menu')
   const [score, setScore] = useState(0)
   const [coinCount, setCoinCount] = useState(0)
+  const [isPaused, setIsPaused] = useState(false)
+  const [isCaught, setIsCaught] = useState(false)
+  const catchTimer = useRef()
   const [best, setBest] = useState(() => readBest())
   const [run, setRun] = useState(0)
   const [settings, setSettings] = useState(DIFFICULTIES.Medium)
 
+  useEffect(() => {
+    const togglePause = (event) => {
+      if (screen !== 'playing') return
+      const key = event.key.toLowerCase()
+      if (event.key === 'Escape' || key === 'p') setIsPaused((value) => !value)
+    }
+    window.addEventListener('keydown', togglePause)
+    return () => window.removeEventListener('keydown', togglePause)
+  }, [screen])
+
   const start = (nextSettings = settings) => {
+    clearTimeout(catchTimer.current)
     setSettings(nextSettings)
+    setIsPaused(false)
+    setIsCaught(false)
     setScore(0)
     setCoinCount(0)
     setRun((value) => value + 1)
@@ -488,9 +573,18 @@ export default function App() {
     const nextBest = Math.max(best, final)
     setScore(final)
     setBest(nextBest)
+    setIsCaught(false)
     localStorage.setItem(KEY, nextBest)
     setScreen('gameover')
   }
+
+  const caught = (finalScore) => {
+    if (isCaught) return
+    setIsCaught(true)
+    catchTimer.current = setTimeout(() => gameOver(finalScore), 1500)
+  }
+
+  useEffect(() => () => clearTimeout(catchTimer.current), [])
 
   if (screen === 'menu') {
     return <MainMenu onStart={start} onHighScore={() => { setBest(readBest()); setScreen('highscore') }} onExit={() => setScreen('exit')} />
@@ -507,19 +601,23 @@ export default function App() {
         <GameScene
           key={run}
           active={screen === 'playing'}
+          isPaused={isPaused}
+          isCaught={isCaught}
           baseSpeed={settings.baseSpeed}
           maxSpeed={settings.maxSpeed}
           onScore={setScore}
           onCoin={(value) => setCoinCount((total) => total + value)}
-          onGameOver={gameOver}
+          onCaught={caught}
         />
       </Canvas>
       <UIOverlay
         score={score}
         coinCount={coinCount}
+        isPaused={isPaused}
         gameOver={screen === 'gameover'}
         onRestart={() => start(settings)}
         onMenu={() => setScreen('menu')}
+        onResume={() => setIsPaused(false)}
       />
     </main>
   )
