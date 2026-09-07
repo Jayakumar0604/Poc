@@ -1,14 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 
 const KEY = 'endless-runner-high-score'
 const LANES = [-2.4, 0, 2.4]
+const OBSTACLE_SIZE = 1.1
 const DIFFICULTIES = {
   Easy: { baseSpeed: 3, maxSpeed: 12 },
   Medium: { baseSpeed: 6, maxSpeed: 18 },
   Hard: { baseSpeed: 9, maxSpeed: 26 },
 }
 const readBest = () => Number(localStorage.getItem(KEY)) || 0
+const coinFits = (x, z, obstacles) => obstacles.every(
+  (obstacle) => Math.abs(obstacle.x - x) >= 1 || Math.abs(obstacle.z - z) >= 1,
+)
 
 function Camera() {
   const { camera } = useThree()
@@ -16,21 +20,76 @@ function Camera() {
   return null
 }
 
-function Player({ playerRef }) {
+function Player({ playerRef, active }) {
+  const velocity = useRef(0)
+  const grounded = useRef(true)
+  const ducking = useRef(false)
+  const setDuck = useCallback((value) => {
+    const player = playerRef.current
+    if (!player) return
+    const scaleY = value ? 0.1 : 1
+    player.scale.set(1, scaleY, 1)
+    player.position.y = -(1.3 / 2) * (1 - scaleY)
+  }, [playerRef])
+
   useEffect(() => {
     const move = (event) => {
+      if (!active || !playerRef.current) return
       const key = event.key.toLowerCase()
-      if (!['a', 'd', 'arrowleft', 'arrowright'].includes(key)) return
+      const jump = event.code === 'Space' || key === 'arrowup'
+      const duck = event.code === 'ArrowDown' || key === 's'
+      if (!jump && !duck && !['a', 'd', 'arrowleft', 'arrowright'].includes(key)) return
       event.preventDefault()
-      const direction = key === 'a' || key === 'arrowleft' ? -1 : 1
-      playerRef.current.position.x = Math.max(
-        -2.8,
-        Math.min(2.8, playerRef.current.position.x + direction * 2.4),
-      )
+
+      if (jump && grounded.current) {
+        ducking.current = false
+        grounded.current = false
+        velocity.current = 9
+        playerRef.current.position.y = 0
+        playerRef.current.scale.y = 1
+      }
+      if (duck && grounded.current) {
+        ducking.current = true
+        setDuck(true)
+      }
+      if (key === 'a' || key === 'd' || key === 'arrowleft' || key === 'arrowright') {
+        const direction = key === 'a' || key === 'arrowleft' ? -1 : 1
+        playerRef.current.position.x = Math.max(
+          -2.8,
+          Math.min(2.8, playerRef.current.position.x + direction * 2.4),
+        )
+      }
+    }
+    const stopDuck = (event) => {
+      if (event.code === 'ArrowDown' || event.key.toLowerCase() === 's') {
+        ducking.current = false
+        if (grounded.current) setDuck(false)
+      }
     }
     window.addEventListener('keydown', move)
-    return () => window.removeEventListener('keydown', move)
-  }, [playerRef])
+    window.addEventListener('keyup', stopDuck)
+    return () => {
+      window.removeEventListener('keydown', move)
+      window.removeEventListener('keyup', stopDuck)
+    }
+  }, [active, playerRef, setDuck])
+
+  useFrame((_, delta) => {
+    if (!active || !playerRef.current) return
+    const player = playerRef.current
+
+    if (!grounded.current) {
+      velocity.current -= 22 * delta
+      player.position.y += velocity.current * delta
+      if (player.position.y <= 0) {
+        player.position.y = 0
+        velocity.current = 0
+        grounded.current = true
+      }
+    }
+
+    if (grounded.current) setDuck(ducking.current)
+  })
 
   return (
     <mesh ref={playerRef} position={[0, 0, 0]}>
@@ -40,16 +99,22 @@ function Player({ playerRef }) {
   )
 }
 
-function Obstacles({ playerRef, scoreRef, onGameOver, active, speedRef, baseSpeed }) {
+function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
   const items = useMemo(
-    () => Array.from({ length: 9 }, (_, i) => ({ x: LANES[i % 3], z: -8 - i * 7 })),
+    () => Array.from({ length: 9 }, (_, i) => {
+      const type = i % 2 ? 'overhead' : 'ground'
+      return { type, x: LANES[i % 3], y: type === 'overhead' ? 1.15 : 0, z: -8 - i * 7 }
+    }),
     [],
   )
   const refs = useRef([])
-  const hit = useRef(false)
+  useEffect(() => {
+    obstaclesRef.current = items
+    return () => { obstaclesRef.current = [] }
+  }, [items, obstaclesRef])
 
   useFrame((_, delta) => {
-    if (!active || hit.current) return
+    if (!active) return
 
     items.forEach((item, index) => {
       const mesh = refs.current[index]
@@ -58,16 +123,10 @@ function Obstacles({ playerRef, scoreRef, onGameOver, active, speedRef, baseSpee
         const spawnDistance = Math.max(38, 72 - (speedRef.current - baseSpeed) * 2)
         item.z = -(spawnDistance + Math.random() * 16)
         item.x = LANES[Math.floor(Math.random() * LANES.length)]
+        item.type = Math.random() < 0.5 ? 'overhead' : 'ground'
+        item.y = item.type === 'overhead' ? 1.15 : 0
       }
-      mesh.position.set(item.x, 0, item.z)
-
-      if (
-        Math.abs(item.z) < 1.15 &&
-        Math.abs(item.x - playerRef.current.position.x) < 1.35
-      ) {
-        hit.current = true
-        onGameOver(scoreRef.current)
-      }
+      mesh.position.set(item.x, item.y, item.z)
     })
   })
 
@@ -75,11 +134,117 @@ function Obstacles({ playerRef, scoreRef, onGameOver, active, speedRef, baseSpee
     <mesh
       key={index}
       ref={(mesh) => (refs.current[index] = mesh)}
-      position={[item.x, 0, item.z]}
+      position={[item.x, item.y, item.z]}
     >
-      <boxGeometry args={[1.5, 1.5, 1.5]} />
+      <boxGeometry args={[OBSTACLE_SIZE, OBSTACLE_SIZE, OBSTACLE_SIZE]} />
       <meshStandardMaterial color="#ff3158" emissive="#6e071c" />
     </mesh>
+  ))
+}
+
+function Coin({ coin, active, playerRef, speedRef, obstaclesRef, onCollect, onRemove, onMove }) {
+  const ref = useRef()
+  const z = useRef(coin.z)
+  const collected = useRef(false)
+
+  useFrame((_, delta) => {
+    if (!active || collected.current) return
+    z.current += delta * speedRef.current
+    onMove(coin.id, coin.x, z.current)
+    ref.current.rotation.y += delta * 7
+    ref.current.position.set(coin.x, coin.y, z.current)
+    if (z.current > 6) {
+      collected.current = true
+      onRemove(coin.id)
+      return
+    }
+
+    const blocked = obstaclesRef.current.some(
+      (obstacle) =>
+        Math.abs(obstacle.x - coin.x) < 0.9 &&
+        Math.abs(obstacle.z - z.current) < 0.9,
+    )
+    if (blocked) {
+      collected.current = true
+      onRemove(coin.id)
+      return
+    }
+
+    const p = playerRef.current.position
+    if (
+      Math.abs(coin.x - p.x) < 0.9 &&
+      Math.abs(coin.y - p.y) < 1 &&
+      Math.abs(z.current - p.z) < 1.1
+    ) {
+      collected.current = true
+      onCollect(coin.id)
+    }
+  })
+
+  return (
+    <mesh ref={ref} position={[coin.x, coin.y, coin.z]} rotation={[Math.PI / 2, 0, 0]}>
+      <torusGeometry args={[0.35, 0.1, 8, 16]} />
+      <meshStandardMaterial color="#ffe600" emissive="#a66b00" />
+    </mesh>
+  )
+}
+
+function makeCoinLine(obstacles, positions, nextId) {
+  const count = 3 + Math.floor(Math.random() * 3)
+  const startZ = -(55 + Math.random() * 20)
+  const zValues = Array.from({ length: count }, (_, i) => startZ - i * 3.5)
+  const lane = [...LANES].sort(() => Math.random() - 0.5).find((x) =>
+    zValues.every((z) =>
+      coinFits(x, z, obstacles) &&
+      [...positions.values()].every(
+        (other) => Math.abs(other.x - x) >= 1 || Math.abs(other.z - z) >= 1,
+      ),
+    ),
+  )
+  if (lane === undefined) return []
+  return zValues.map((z) => ({ id: nextId.current++, x: lane, y: 0.8, z }))
+}
+
+function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, onCoin }) {
+  const [coins, setCoins] = useState([])
+  const live = useRef([])
+  const positions = useRef(new Map())
+  const timer = useRef(0)
+  const nextId = useRef(0)
+
+  const commit = (items) => {
+    live.current = items
+    setCoins(items)
+  }
+
+  const remove = (id) => {
+    positions.current.delete(id)
+    commit(live.current.filter((coin) => coin.id !== id))
+  }
+
+  useFrame((_, delta) => {
+    if (!active) return
+    timer.current -= delta
+    if (timer.current <= 0) {
+      const line = makeCoinLine(obstaclesRef.current, positions.current, nextId)
+      line.forEach((coin) => positions.current.set(coin.id, { x: coin.x, z: coin.z }))
+      if (line.length) commit([...live.current, ...line])
+      timer.current = 1.5
+    }
+  })
+
+  return coins.map((coin) => (
+    <Coin
+      key={coin.id}
+      coin={coin}
+      active={active}
+      playerRef={playerRef}
+      speedRef={speedRef}
+      obstaclesRef={obstaclesRef}
+      onCollect={(id) => { remove(id); onCoin() }}
+      onRemove={remove}
+      onMove={(id, x, z) => positions.current.set(id, { x, z })}
+    />
   ))
 }
 
@@ -120,15 +285,17 @@ function Road({ active, speedRef }) {
   )
 }
 
-function GameScene({ active, baseSpeed, maxSpeed, onScore, onGameOver }) {
+function GameScene({ active, baseSpeed, maxSpeed, onScore, onGameOver, onCoin }) {
   const grid = useRef()
   const player = useRef()
+  const obstacles = useRef([])
   const score = useRef(0)
   const lastScore = useRef(0)
   const currentSpeed = useRef(baseSpeed)
+  const ended = useRef(false)
 
   useFrame((_, delta) => {
-    if (!active) return
+    if (!active || ended.current) return
     currentSpeed.current = Math.min(currentSpeed.current + delta * 0.4, maxSpeed)
     grid.current.position.z += delta * currentSpeed.current
     if (grid.current.position.z > 0) grid.current.position.z = -20
@@ -136,6 +303,25 @@ function GameScene({ active, baseSpeed, maxSpeed, onScore, onGameOver }) {
     if (Math.floor(score.current) !== lastScore.current) {
       lastScore.current = Math.floor(score.current)
       onScore(lastScore.current)
+    }
+
+    const playerX = player.current.position.x
+    const playerY = player.current.position.y
+    const playerZ = player.current.position.z
+
+    for (const obstacle of obstacles.current) {
+      const obsX = obstacle.x
+      const obsZ = obstacle.z
+      const obsHeight = obstacle.y + OBSTACLE_SIZE / 2
+      const hitX = Math.abs(playerX - obsX) < 1
+      const hitZ = Math.abs(playerZ - obsZ) < 1
+      const hitY = playerY < obsHeight
+
+      if (hitX && hitZ && hitY) {
+        ended.current = true
+        onGameOver(score.current)
+        break
+      }
     }
   })
 
@@ -146,14 +332,19 @@ function GameScene({ active, baseSpeed, maxSpeed, onScore, onGameOver }) {
       <directionalLight position={[2, 5, 4]} intensity={3} color="#8be9ff" />
       <gridHelper ref={grid} args={[60, 30, '#17617d', '#102c42']} position={[0, -0.55, -20]} />
       <Road active={active} speedRef={currentSpeed} />
-      <Player playerRef={player} />
+      <Player playerRef={player} active={active} />
       <Obstacles
         active={active}
         baseSpeed={baseSpeed}
-        playerRef={player}
-        scoreRef={score}
+        obstaclesRef={obstacles}
         speedRef={currentSpeed}
-        onGameOver={onGameOver}
+      />
+      <CoinSpawner
+        active={active}
+        speedRef={currentSpeed}
+        obstaclesRef={obstacles}
+        playerRef={player}
+        onCoin={onCoin}
       />
     </>
   )
@@ -229,14 +420,15 @@ function HighScore({ score, onBack }) {
   )
 }
 
-function UIOverlay({ score, gameOver, onRestart, onMenu }) {
+function UIOverlay({ score, coinCount, gameOver, onRestart, onMenu }) {
   return (
     <div className="pointer-events-none absolute inset-0">
       <div className="absolute left-5 top-5 border border-cyan-300/20 bg-slate-950/75 px-4 py-2 font-mono text-xs text-slate-400">
         <span className="text-cyan-300">NEON RUN</span> · A/D or ←/→
       </div>
-      <div className="absolute right-5 top-5 border border-cyan-300/30 bg-slate-950/75 px-4 py-2 font-mono text-sm text-cyan-200">
-        SCORE {score.toString().padStart(4, '0')}
+      <div className="absolute right-5 top-5 flex gap-4 border border-cyan-300/30 bg-slate-950/75 px-4 py-2 font-mono text-sm">
+        <span className="text-cyan-200">SCORE {score.toString().padStart(4, '0')}</span>
+        <span className="text-yellow-300">COINS: {coinCount}</span>
       </div>
       {gameOver && (
         <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-slate-950/65 p-6">
@@ -256,6 +448,7 @@ function UIOverlay({ score, gameOver, onRestart, onMenu }) {
 export default function App() {
   const [screen, setScreen] = useState('menu')
   const [score, setScore] = useState(0)
+  const [coinCount, setCoinCount] = useState(0)
   const [best, setBest] = useState(() => readBest())
   const [run, setRun] = useState(0)
   const [settings, setSettings] = useState(DIFFICULTIES.Medium)
@@ -263,6 +456,7 @@ export default function App() {
   const start = (nextSettings = settings) => {
     setSettings(nextSettings)
     setScore(0)
+    setCoinCount(0)
     setRun((value) => value + 1)
     setScreen('playing')
   }
@@ -294,11 +488,13 @@ export default function App() {
           baseSpeed={settings.baseSpeed}
           maxSpeed={settings.maxSpeed}
           onScore={setScore}
+          onCoin={() => setCoinCount((value) => value + 1)}
           onGameOver={gameOver}
         />
       </Canvas>
       <UIOverlay
         score={score}
+        coinCount={coinCount}
         gameOver={screen === 'gameover'}
         onRestart={() => start(settings)}
         onMenu={() => setScreen('menu')}
