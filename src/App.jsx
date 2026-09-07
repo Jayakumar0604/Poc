@@ -4,6 +4,8 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 const KEY = 'endless-runner-high-score'
 const LANES = [-2.4, 0, 2.4]
 const OBSTACLE_SIZE = 1.1
+const OBSTACLE_COLORS = ['#ff0055', '#00ffcc', '#ffaa00', '#aa00ff']
+const randomObstacleColor = () => OBSTACLE_COLORS[Math.floor(Math.random() * OBSTACLE_COLORS.length)]
 const DIFFICULTIES = {
   Easy: { baseSpeed: 3, maxSpeed: 12 },
   Medium: { baseSpeed: 6, maxSpeed: 18 },
@@ -103,7 +105,7 @@ function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
   const items = useMemo(
     () => Array.from({ length: 9 }, (_, i) => {
       const type = i % 2 ? 'overhead' : 'ground'
-      return { type, x: LANES[i % 3], y: type === 'overhead' ? 1.15 : 0, z: -8 - i * 7 }
+      return { type, color: randomObstacleColor(), x: LANES[i % 3], y: type === 'overhead' ? 1.15 : 0, z: -8 - i * 7 }
     }),
     [],
   )
@@ -124,9 +126,11 @@ function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
         item.z = -(spawnDistance + Math.random() * 16)
         item.x = LANES[Math.floor(Math.random() * LANES.length)]
         item.type = Math.random() < 0.5 ? 'overhead' : 'ground'
+        item.color = randomObstacleColor()
         item.y = item.type === 'overhead' ? 1.15 : 0
       }
       mesh.position.set(item.x, item.y, item.z)
+      mesh.material.color.set(item.color)
     })
   })
 
@@ -137,7 +141,7 @@ function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
       position={[item.x, item.y, item.z]}
     >
       <boxGeometry args={[OBSTACLE_SIZE, OBSTACLE_SIZE, OBSTACLE_SIZE]} />
-      <meshStandardMaterial color="#ff3158" emissive="#6e071c" />
+      <meshStandardMaterial color={item.color} emissive="#6e071c" />
     </mesh>
   ))
 }
@@ -177,19 +181,23 @@ function Coin({ coin, active, playerRef, speedRef, obstaclesRef, onCollect, onRe
       Math.abs(z.current - p.z) < 1.1
     ) {
       collected.current = true
-      onCollect(coin.id)
+      onCollect(coin.id, coin.value)
     }
   })
 
   return (
     <mesh ref={ref} position={[coin.x, coin.y, coin.z]} rotation={[Math.PI / 2, 0, 0]}>
-      <torusGeometry args={[0.35, 0.1, 8, 16]} />
-      <meshStandardMaterial color="#ffe600" emissive="#a66b00" />
+      {coin.superCoin ? (
+        <cylinderGeometry args={[0.5, 0.5, 0.2]} />
+      ) : (
+        <cylinderGeometry args={[0.3, 0.3, 0.1]} />
+      )}
+      <meshStandardMaterial color={coin.superCoin ? 'gold' : 'yellow'} emissive="#a66b00" />
     </mesh>
   )
 }
 
-function makeCoinLine(obstacles, positions, nextId) {
+function makeCoinLine(obstacles, positions, nextId, coinsSpawned) {
   const count = 3 + Math.floor(Math.random() * 3)
   const startZ = -(55 + Math.random() * 20)
   const zValues = Array.from({ length: count }, (_, i) => startZ - i * 3.5)
@@ -202,7 +210,17 @@ function makeCoinLine(obstacles, positions, nextId) {
     ),
   )
   if (lane === undefined) return []
-  return zValues.map((z) => ({ id: nextId.current++, x: lane, y: 0.8, z }))
+  return zValues.map((z) => {
+    const superCoin = coinsSpawned.current++ % 11 === 10
+    return {
+      id: nextId.current++,
+      x: lane,
+      y: 0.8,
+      z,
+      superCoin,
+      value: superCoin ? 20 : 5,
+    }
+  })
 }
 
 function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, onCoin }) {
@@ -211,6 +229,7 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, onCoin }) {
   const positions = useRef(new Map())
   const timer = useRef(0)
   const nextId = useRef(0)
+  const coinsSpawned = useRef(0)
 
   const commit = (items) => {
     live.current = items
@@ -226,7 +245,7 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, onCoin }) {
     if (!active) return
     timer.current -= delta
     if (timer.current <= 0) {
-      const line = makeCoinLine(obstaclesRef.current, positions.current, nextId)
+      const line = makeCoinLine(obstaclesRef.current, positions.current, nextId, coinsSpawned)
       line.forEach((coin) => positions.current.set(coin.id, { x: coin.x, z: coin.z }))
       if (line.length) commit([...live.current, ...line])
       timer.current = 1.5
@@ -241,7 +260,7 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, onCoin }) {
       playerRef={playerRef}
       speedRef={speedRef}
       obstaclesRef={obstaclesRef}
-      onCollect={(id) => { remove(id); onCoin() }}
+      onCollect={(id, value) => { remove(id); onCoin(value) }}
       onRemove={remove}
       onMove={(id, x, z) => positions.current.set(id, { x, z })}
     />
@@ -306,16 +325,19 @@ function GameScene({ active, baseSpeed, maxSpeed, onScore, onGameOver, onCoin })
     }
 
     const playerX = player.current.position.x
-    const playerY = player.current.position.y
     const playerZ = player.current.position.z
+    const isDucking = player.current.scale.y < 1
+    const currentHeight = isDucking ? 0.25 : 1.0
+    const playerTop = player.current.position.y + currentHeight / 2
 
     for (const obstacle of obstacles.current) {
       const obsX = obstacle.x
       const obsZ = obstacle.z
-      const obsHeight = obstacle.y + OBSTACLE_SIZE / 2
+      const obstacleBottom = obstacle.y - OBSTACLE_SIZE / 2
+      const obstacleTop = obstacle.y + OBSTACLE_SIZE / 2
       const hitX = Math.abs(playerX - obsX) < 1
       const hitZ = Math.abs(playerZ - obsZ) < 1
-      const hitY = playerY < obsHeight
+      const hitY = playerTop > obstacleBottom && player.current.position.y - currentHeight / 2 < obstacleTop
 
       if (hitX && hitZ && hitY) {
         ended.current = true
@@ -488,7 +510,7 @@ export default function App() {
           baseSpeed={settings.baseSpeed}
           maxSpeed={settings.maxSpeed}
           onScore={setScore}
-          onCoin={() => setCoinCount((value) => value + 1)}
+          onCoin={(value) => setCoinCount((total) => total + value)}
           onGameOver={gameOver}
         />
       </Canvas>
