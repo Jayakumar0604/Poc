@@ -15,17 +15,17 @@ const coinFits = (x, z, obstacles) => obstacles.every(
   (obstacle) => Math.abs(obstacle.x - x) >= 1 || Math.abs(obstacle.z - z) >= 1,
 )
 
-function Camera({ isCaught }) {
+function Camera({ isCaught, cinematic }) {
   const { camera } = useThree()
 
   useFrame((_, delta) => {
-    const targetZ = isCaught ? 3.5 : 7
-    const targetY = isCaught ? 2.8 : 3.5
+    const targetZ = isCaught ? 3.5 : cinematic ? 5.5 : 7
+    const targetY = isCaught ? 2.8 : cinematic ? 2.6 : 3.5
     camera.position.lerp(
       { x: camera.position.x, y: targetY, z: targetZ },
       Math.min(1, delta * 6),
     )
-    camera.lookAt(0, isCaught ? 0.2 : 0, -18)
+    camera.lookAt(0, isCaught ? 0.2 : 0.1, cinematic ? -10 : -18)
   })
 
   return null
@@ -121,7 +121,57 @@ function SideScenery({ active, speedRef, theme }) {
   ))
 }
 
-function Mouse({ playerRef, active }) {
+function MenuDecor() {
+  const cheeseBlocks = [[-2.5, 0.65, -7], [2.6, 0.7, -12], [0.8, 0.7, -20]]
+  const trees = [[-5.5, -19], [5.5, -24], [-6, -38], [6, -42]]
+
+  return (
+    <>
+      {cheeseBlocks.map(([x, y, z], index) => (
+        <group key={`cheese-${index}`} position={[x, y, z]} rotation={[0, index * 0.4, 0]}>
+          <mesh castShadow receiveShadow>
+            <boxGeometry args={[1.4, 1.4, 1.4]} />
+            <meshStandardMaterial color="#ffca28" flatShading />
+          </mesh>
+          <mesh position={[-0.35, 0.3, -0.72]}>
+            <sphereGeometry args={[0.14, 8, 8]} />
+            <meshStandardMaterial color="#d88b18" flatShading />
+          </mesh>
+          <mesh position={[0.25, -0.25, -0.72]}>
+            <sphereGeometry args={[0.1, 8, 8]} />
+            <meshStandardMaterial color="#d88b18" flatShading />
+          </mesh>
+        </group>
+      ))}
+      {trees.map(([x, z], index) => (
+        <group key={`tree-${index}`} position={[x, 0, z]}>
+          <mesh position={[0, 1.3, 0]} castShadow>
+            <cylinderGeometry args={[0.18, 0.24, 2.6, 8]} />
+            <meshStandardMaterial color="#8b5a2b" flatShading />
+          </mesh>
+          <mesh position={[0, 2.8, 0]} castShadow>
+            <sphereGeometry args={[1.1, 8, 6]} />
+            <meshStandardMaterial color="#65a854" flatShading />
+          </mesh>
+        </group>
+      ))}
+      <group position={[-4.7, 0, -8]} rotation={[0, 0.1, 0]}>
+        <mesh position={[0, 1.4, 0]} castShadow>
+          <cylinderGeometry args={[0.12, 0.16, 2.8, 6]} />
+          <meshStandardMaterial color="#6b4226" flatShading />
+        </mesh>
+        {[0.8, 1.45, 2.1].map((y, index) => (
+          <mesh key={y} position={[0, y, 0]} rotation={[0, 0, index % 2 ? -0.08 : 0.08]} castShadow>
+            <boxGeometry args={[1.4, 0.35, 0.12]} />
+            <meshStandardMaterial color="#d79b5b" flatShading />
+          </mesh>
+        ))}
+      </group>
+    </>
+  )
+}
+
+function Mouse({ playerRef, active, cinematic }) {
   const velocity = useRef(0)
   const grounded = useRef(true)
   const ducking = useRef(false)
@@ -187,7 +237,7 @@ function Mouse({ playerRef, active }) {
   })
 
   return (
-    <group ref={playerRef} position={[0, 0, 0]} scale={[1, 1, 1]}>
+    <group ref={playerRef} position={cinematic ? [-2.4, 0, 1.5] : [0, 0, 0]} scale={[1, 1, 1]}>
       <mesh scale={[1, 1, 1.5]} castShadow receiveShadow>
         <sphereGeometry args={[0.2, 16, 16]} />
         <meshStandardMaterial color="#777" flatShading />
@@ -243,7 +293,7 @@ function Cat({ catRef, playerRef, active, isCaught }) {
   })
 
   return (
-    <group ref={catRef} position={[0, 0, 3]}>
+    <group ref={catRef} position={[0, 0, 3]} visible={active || isCaught}>
       <mesh position={[0, 0, 0.15]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
         <cylinderGeometry args={[0.3, 0.35, 1.2, 6]} />
         <meshStandardMaterial color="#171923" flatShading />
@@ -612,7 +662,7 @@ function Environment({ active, speedRef }) {
   )
 }
 
-function GameScene({ active, isPaused, isCaught, theme, baseSpeed, maxSpeed, onScore, onCaught, onCoin }) {
+function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseSpeed, maxSpeed, onScore, onCaught, onCoin }) {
   const player = useRef()
   const cat = useRef()
   const obstacles = useRef([])
@@ -652,12 +702,13 @@ function GameScene({ active, isPaused, isCaught, theme, baseSpeed, maxSpeed, onS
 
   return (
     <>
-      <Camera isCaught={isCaught} />
+      <Camera isCaught={isCaught} cinematic={cinematic} />
       <Lighting theme={theme} />
       <SkyEnvironment active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
       <SideScenery active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
       <Environment active={active && !isPaused && !isCaught} speedRef={currentSpeed} />
-      <Mouse playerRef={player} active={active && !isPaused && !isCaught} />
+      {cinematic && <MenuDecor />}
+      <Mouse playerRef={player} active={active && !isPaused && !isCaught} cinematic={cinematic} />
       <Cat catRef={cat} playerRef={player} active={active && !isPaused} isCaught={isCaught} />
       <Obstacles
         active={active && !isPaused}
@@ -683,6 +734,7 @@ function MenuBackground({ theme }) {
         active={false}
         isPaused={false}
         isCaught={false}
+        cinematic
         theme={theme}
         baseSpeed={6}
         maxSpeed={18}
@@ -690,7 +742,7 @@ function MenuBackground({ theme }) {
         onCaught={() => {}}
         onCoin={() => {}}
       />
-      <EffectComposer multisampling={0}>
+      <EffectComposer multisampling={0} enableNormalPass>
         <SSAO radius={0.25} intensity={1.2} luminanceInfluence={0.7} samples={16} />
       </EffectComposer>
     </Canvas>
@@ -698,9 +750,11 @@ function MenuBackground({ theme }) {
 }
 
 function MainMenu({ onStart, onHighScore, onExit, theme, onTheme }) {
-  const [difficulty, setDifficulty] = useState('Medium')
-  const [speed, setSpeed] = useState(DIFFICULTIES.Medium.baseSpeed)
+  const [difficulty, setDifficulty] = useState('Easy')
+  const [speed, setSpeed] = useState(DIFFICULTIES.Easy.baseSpeed)
   const profile = DIFFICULTIES[difficulty]
+  const motion = 'transition-transform hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+  const option = (selected) => `rounded-xl border-4 border-black px-3 py-2 uppercase font-black tracking-wider ${motion} ${selected ? 'bg-yellow-400 text-black' : 'bg-cyan-400 text-black'}`
 
   const chooseDifficulty = (name) => {
     setDifficulty(name)
@@ -708,59 +762,44 @@ function MainMenu({ onStart, onHighScore, onExit, theme, onTheme }) {
   }
 
   return (
-    <div className="font-cartoon flex min-h-screen w-full items-center justify-center px-4 py-8 text-white sm:px-6" style={{ perspective: '1000px' }}>
-      <div className="menu-float w-full max-w-md rounded-2xl border border-[#ffca28]/35 bg-black/40 p-8 shadow-xl backdrop-blur-md sm:p-10">
+    <div className="flex min-h-screen w-full flex-col items-center justify-center bg-black/50 px-4 py-8 text-white backdrop-blur-sm sm:px-6">
+      <div className="w-full max-w-md rounded-2xl border-4 border-black bg-amber-900 p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] sm:p-8">
         <div className="text-center">
-          <p className="font-mono text-xs uppercase tracking-[0.35em] text-yellow-300">Cheese Chase</p>
-          <h1 className="menu-title mt-3 text-4xl font-black tracking-tight sm:text-5xl">Cheese Chase</h1>
-          <p className="mt-4 text-sm leading-6 text-slate-400">Dodge the blocks and stay on the road.</p>
+          <div className="mb-2 text-4xl" aria-hidden="true">🧀</div>
+          <h1 className="text-5xl uppercase font-black tracking-wider text-yellow-400 drop-shadow-[3px_3px_0px_#000] sm:text-6xl">Cheese Chase</h1>
+          <p className="mt-4 text-sm font-bold text-yellow-50">Dodge the blocks and stay on the road.</p>
         </div>
 
         <div className="mt-8">
-          <p className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-500">Theme</p>
-          <div className="mb-6 grid grid-cols-2 gap-2">
+          <p className="mb-3 uppercase font-black tracking-wider text-yellow-100">Theme</p>
+          <div className="mb-6 grid grid-cols-2 gap-3">
             {['day', 'night'].map((mode) => (
-              <button
-                key={mode}
-                onClick={() => onTheme(mode)}
-                className={`border px-3 py-2 text-sm font-bold capitalize transition ${theme === mode ? 'border-cyan-300 bg-cyan-400 text-slate-950' : 'border-slate-700 text-slate-300 hover:border-cyan-300'}`}
-              >
-                {mode}
+              <button key={mode} onClick={() => onTheme(mode)} className={option(theme === mode)}>
+                {mode === 'day' ? '☀ ' : '☾ '}{mode}
               </button>
             ))}
           </div>
-          <p className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-500">Difficulty</p>
+          <p className="mb-3 uppercase font-black tracking-wider text-yellow-100">Difficulty</p>
           <div className="grid grid-cols-3 gap-2">
             {Object.keys(DIFFICULTIES).map((name) => (
-              <button
-                key={name}
-                onClick={() => chooseDifficulty(name)}
-                className={`border px-3 py-2 text-sm font-bold transition ${difficulty === name ? 'border-cyan-300 bg-cyan-400 text-slate-950' : 'border-slate-700 text-slate-300 hover:border-cyan-300'}`}
-              >
+              <button key={name} onClick={() => chooseDifficulty(name)} className={option(difficulty === name)}>
                 {name}
               </button>
             ))}
           </div>
         </div>
 
-        <label className="mt-6 block text-sm text-slate-300">
-          Starting speed: <b className="text-cyan-300">{speed}</b>
-          <input
-            type="range"
-            min="1"
-            max="10"
-            value={speed}
-            onChange={(event) => setSpeed(Number(event.target.value))}
-            className="mt-3 w-full accent-cyan-400"
-          />
-          <span className="mt-1 flex justify-between text-xs text-slate-600"><span>1</span><span>10</span></span>
+        <label className="mt-6 block font-bold text-yellow-50">
+          Starting speed: <b className="text-yellow-300">{speed}</b>
+          <input type="range" min="1" max="10" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} className="mt-3 w-full accent-yellow-400" />
+          <span className="mt-1 flex justify-between text-xs font-black"><span>1</span><span>10</span></span>
         </label>
 
-        <p className="mt-4 text-center text-xs text-slate-500">Max speed: {profile.maxSpeed} · A/D or ←/→ to move</p>
-        <div className="mt-6 space-y-3">
-          <button onClick={() => onStart({ baseSpeed: speed, maxSpeed: profile.maxSpeed })} className="menu-button">Start Game</button>
-          <button onClick={onHighScore} className="menu-button menu-button-secondary">High Score</button>
-          <button onClick={onExit} className="menu-button menu-button-secondary">Exit Game</button>
+        <p className="mt-4 text-center text-xs font-bold text-yellow-100">Max speed: {profile.maxSpeed} · A/D or ←/→ to move</p>
+        <div className="mt-6 space-y-4">
+          <button onClick={() => onStart({ baseSpeed: speed, maxSpeed: profile.maxSpeed })} className={`w-full rounded-xl border-4 border-black bg-yellow-400 px-4 py-3 uppercase font-black tracking-wider text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${motion}`}>▶ Start Game</button>
+          <button onClick={onHighScore} className={`w-full rounded-xl border-4 border-black bg-cyan-400 px-4 py-3 uppercase font-black tracking-wider text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${motion}`}>🏆 High Score</button>
+          <button onClick={onExit} className={`w-full rounded-xl border-4 border-black bg-cyan-400 px-4 py-3 uppercase font-black tracking-wider text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${motion}`}>↪ Exit Game</button>
         </div>
       </div>
     </div>
@@ -896,6 +935,7 @@ export default function App() {
           active={screen === 'playing'}
           isPaused={isPaused}
           isCaught={isCaught}
+          cinematic={screen === 'menu'}
           theme={theme}
           baseSpeed={settings.baseSpeed}
           maxSpeed={settings.maxSpeed}
@@ -903,7 +943,7 @@ export default function App() {
           onCoin={(value) => setCoinCount((total) => total + value)}
           onCaught={caught}
         />
-        <EffectComposer multisampling={0}>
+        <EffectComposer multisampling={0} enableNormalPass>
           <SSAO radius={0.25} intensity={1.2} luminanceInfluence={0.7} samples={16} />
         </EffectComposer>
       </Canvas>
