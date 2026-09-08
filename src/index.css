@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -20,6 +21,11 @@ button {
   cursor: pointer;
 }
 
+.font-cartoon {
+  font-family: "Fredoka", "Trebuchet MS", sans-serif;
+}
+
 .menu-button {
-  @apply w-full border border-cyan-300/40 bg-cyan-400 px-4 py-3 font-bold text-slate-950 transition hover:bg-cyan-300;
+  @apply w-full rounded-xl border border-[#ffca28] bg-[#ffca28] px-4 py-3 font-bold text-[#3b2117] shadow-md transition hover:bg-[#ffd95a];
+  font-family: "Fredoka", "Trebuchet MS", sans-serif;
 }

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { EffectComposer, SSAO } from '@react-three/postprocessing'
+import { CanvasTexture, DoubleSide, RepeatWrapping } from 'three'
 
 const KEY = 'endless-runner-high-score'
 const LANES = [-2.4, 0, 2.4]
@@ -35,12 +37,13 @@ function Lighting({ theme }) {
     <>
       <color attach="background" args={[day ? '#87CEEB' : '#0B0C10']} />
       <fog attach="fog" args={[day ? '#87CEEB' : '#0B0C10', 15, 60]} />
-      <ambientLight intensity={day ? 0.8 : 0.15} color={day ? '#ffffff' : '#223355'} />
+      <ambientLight intensity={day ? 0.95 : 0.35} color={day ? '#fff1d0' : '#443022'} />
       <directionalLight
         position={day ? [10, 20, 10] : [5, 10, 5]}
-        intensity={day ? 2 : 0.4}
-        color={day ? '#ffffff' : '#5588ff'}
-        castShadow={day}
+        intensity={day ? 1.5 : 0.7}
+        color={day ? '#ffd39a' : '#d98b5f'}
+        castShadow
+        shadow-radius={4}
       />
     </>
   )
@@ -489,7 +492,73 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, onCoin }) {
   ))
 }
 
+function KitchenProps() {
+  return (
+    <>
+      <group position={[-6.2, 2, -28]}>
+        <mesh castShadow receiveShadow>
+          <boxGeometry args={[2.4, 4, 2.6]} />
+          <meshStandardMaterial color="#b8dfd8" flatShading />
+        </mesh>
+        <mesh position={[1.22, 0, 0]} castShadow>
+          <boxGeometry args={[0.04, 3.4, 2.2]} />
+          <meshStandardMaterial color="#f7f1df" flatShading />
+        </mesh>
+        <mesh position={[1.28, 0.5, 0]} castShadow>
+          <boxGeometry args={[0.08, 0.08, 0.45]} />
+          <meshStandardMaterial color="#b7794b" flatShading />
+        </mesh>
+      </group>
+      <group position={[6.2, 1.7, -45]}>
+        <mesh castShadow receiveShadow>
+          <boxGeometry args={[3.2, 3.4, 2.8]} />
+          <meshStandardMaterial color="#e7b98c" flatShading />
+        </mesh>
+        <mesh position={[0, 0.2, -1.43]} castShadow>
+          <boxGeometry args={[2.5, 1.8, 0.05]} />
+          <meshStandardMaterial color="#4b3025" flatShading />
+        </mesh>
+        <mesh position={[0, 0.8, -1.48]} castShadow>
+          <boxGeometry args={[2.3, 0.08, 0.08]} />
+          <meshStandardMaterial color="#ffca28" flatShading />
+        </mesh>
+      </group>
+      <group position={[-6.4, 1.4, -60]}>
+        <mesh castShadow receiveShadow>
+          <boxGeometry args={[3.2, 2.8, 2.2]} />
+          <meshStandardMaterial color="#f2c6a0" flatShading />
+        </mesh>
+        <mesh position={[0, 0.2, -1.13]} castShadow>
+          <boxGeometry args={[2.8, 0.12, 0.08]} />
+          <meshStandardMaterial color="#fff1d6" flatShading />
+        </mesh>
+      </group>
+    </>
+  )
+}
+
 function Environment({ active, speedRef }) {
+  const woodNormal = useMemo(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 64
+    canvas.height = 64
+    const context = canvas.getContext('2d')
+    context.fillStyle = 'rgb(128, 128, 255)'
+    context.fillRect(0, 0, 64, 64)
+    context.strokeStyle = 'rgba(150, 150, 255, 0.3)'
+    context.lineWidth = 1
+    for (let y = 4; y < 64; y += 8) {
+      context.beginPath()
+      context.moveTo(0, y)
+      context.lineTo(64, y + 2)
+      context.stroke()
+    }
+    const texture = new CanvasTexture(canvas)
+    texture.wrapS = RepeatWrapping
+    texture.wrapT = RepeatWrapping
+    texture.repeat.set(2, 10)
+    return texture
+  }, [])
   const planks = useMemo(
     () => Array.from({ length: 20 }, (_, i) => ({ z: -i * 4 - 4 })),
     [],
@@ -506,9 +575,24 @@ function Environment({ active, speedRef }) {
 
   return (
     <>
+      <mesh position={[-4.25, 2.1, -35]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
+        <planeGeometry args={[82, 5]} />
+        <meshStandardMaterial color="#f3dfb3" side={DoubleSide} flatShading />
+      </mesh>
+      <mesh position={[4.25, 2.1, -35]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
+        <planeGeometry args={[82, 5]} />
+        <meshStandardMaterial color="#d8eee1" side={DoubleSide} flatShading />
+      </mesh>
+      <KitchenProps />
       <mesh position={[0, -0.57, -35]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[8, 82]} />
-        <meshStandardMaterial color="#b97850" flatShading />
+        <meshStandardMaterial
+          color="#b97850"
+          normalMap={woodNormal}
+          normalScale={[0.08, 0.08]}
+          roughness={0.8}
+          flatShading
+        />
       </mesh>
       {planks.map((plank, index) => (
         <mesh key={index} ref={(mesh) => (refs.current[index] = mesh)} position={[0, -0.53, plank.z]} castShadow receiveShadow>
@@ -592,6 +676,27 @@ function GameScene({ active, isPaused, isCaught, theme, baseSpeed, maxSpeed, onS
   )
 }
 
+function MenuBackground({ theme }) {
+  return (
+    <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 3.5, 7], fov: 55 }}>
+      <GameScene
+        active={false}
+        isPaused={false}
+        isCaught={false}
+        theme={theme}
+        baseSpeed={6}
+        maxSpeed={18}
+        onScore={() => {}}
+        onCaught={() => {}}
+        onCoin={() => {}}
+      />
+      <EffectComposer multisampling={0}>
+        <SSAO radius={0.25} intensity={1.2} luminanceInfluence={0.7} samples={16} />
+      </EffectComposer>
+    </Canvas>
+  )
+}
+
 function MainMenu({ onStart, onHighScore, onExit, theme, onTheme }) {
   const [difficulty, setDifficulty] = useState('Medium')
   const [speed, setSpeed] = useState(DIFFICULTIES.Medium.baseSpeed)
@@ -603,8 +708,8 @@ function MainMenu({ onStart, onHighScore, onExit, theme, onTheme }) {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#070b1a] px-6 text-white">
-      <div className="w-full max-w-md border border-cyan-300/20 bg-slate-950/90 p-8 shadow-2xl shadow-cyan-950/30 sm:p-10">
+    <div className="font-cartoon flex min-h-screen w-full items-center justify-center px-4 py-8 text-white sm:px-6">
+      <div className="w-full max-w-md rounded-2xl border border-[#ffca28]/35 bg-black/40 p-8 shadow-xl backdrop-blur-md sm:p-10">
         <div className="text-center">
           <p className="font-mono text-xs uppercase tracking-[0.35em] text-yellow-300">Cheese Chase</p>
           <h1 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Cheese Chase</h1>
@@ -676,7 +781,7 @@ function HighScore({ score, onBack }) {
 
 function UIOverlay({ score, coinCount, isPaused, gameOver, onRestart, onMenu, onResume }) {
   return (
-    <div className="pointer-events-none absolute inset-0">
+    <div className="font-cartoon pointer-events-none absolute inset-0">
       <div className="absolute left-5 top-5 border border-cyan-300/20 bg-slate-950/75 px-4 py-2 font-mono text-xs text-slate-400">
         <span className="font-black text-yellow-300">CHEESE CHASE</span> · A/D or ←/→
       </div>
@@ -768,15 +873,24 @@ export default function App() {
   useEffect(() => () => clearTimeout(catchTimer.current), [])
 
   if (screen === 'menu') {
-    return <MainMenu theme={theme} onTheme={setTheme} onStart={start} onHighScore={() => { setBest(readBest()); setScreen('highscore') }} onExit={() => setScreen('exit')} />
+    return (
+      <div className="relative min-h-screen w-full overflow-hidden bg-[#3b2117]">
+        <div className="absolute inset-0 scale-105 blur-[3px]">
+          <MenuBackground theme={theme} />
+        </div>
+        <div className="relative z-10">
+          <MainMenu theme={theme} onTheme={setTheme} onStart={start} onHighScore={() => { setBest(readBest()); setScreen('highscore') }} onExit={() => setScreen('exit')} />
+        </div>
+      </div>
+    )
   }
 
   if (screen === 'highscore') return <HighScore score={best} onBack={() => setScreen('menu')} />
   if (screen === 'exit') return <div className="flex min-h-screen items-center justify-center bg-black text-white">Thanks for playing</div>
 
   return (
-    <main className="relative h-screen w-screen overflow-hidden bg-[#070b1a]">
-      <Canvas shadows camera={{ position: [0, 3.5, 7], fov: 55 }}>
+    <main className="relative h-screen w-screen overflow-hidden bg-[#3b2117]">
+      <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 3.5, 7], fov: 55 }}>
         <GameScene
           key={run}
           active={screen === 'playing'}
@@ -789,6 +903,9 @@ export default function App() {
           onCoin={(value) => setCoinCount((total) => total + value)}
           onCaught={caught}
         />
+        <EffectComposer multisampling={0}>
+          <SSAO radius={0.25} intensity={1.2} luminanceInfluence={0.7} samples={16} />
+        </EffectComposer>
       </Canvas>
       <UIOverlay
         score={score}
