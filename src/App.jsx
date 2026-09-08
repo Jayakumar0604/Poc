@@ -25,14 +25,32 @@ function Lighting({ theme }) {
     <>
       <color attach="background" args={[day ? '#87CEEB' : '#0B0C10']} />
       <fog attach="fog" args={[day ? '#87CEEB' : '#0B0C10', 15, 60]} />
-      <ambientLight intensity={day ? 0.8 : 0.3} />
+      <ambientLight intensity={day ? 0.8 : 0.15} color={day ? '#ffffff' : '#223355'} />
       <directionalLight
-        position={[10, 20, 10]}
-        intensity={day ? 2 : 1.2}
-        color={day ? '#ffffff' : '#4a90e2'}
-        castShadow
+        position={day ? [10, 20, 10] : [5, 10, 5]}
+        intensity={day ? 2 : 0.4}
+        color={day ? '#ffffff' : '#5588ff'}
+        castShadow={day}
       />
     </>
+  )
+}
+
+function StreetLight({ theme }) {
+  return (
+    <group>
+      <mesh position={[0, 2, 0]} castShadow>
+        <cylinderGeometry args={[0.06, 0.08, 4, 8]} />
+        <meshStandardMaterial color="#333" flatShading />
+      </mesh>
+      <mesh position={[0, 4, 0]} castShadow>
+        <boxGeometry args={[0.35, 0.15, 0.35]} />
+        <meshStandardMaterial color="#ffaa00" emissive="#ffaa00" emissiveIntensity={2} flatShading />
+      </mesh>
+      {theme === 'night' && (
+        <pointLight position={[0, 3.5, 0]} intensity={50} distance={20} decay={2} color="#ffaa00" />
+      )}
+    </group>
   )
 }
 
@@ -58,7 +76,7 @@ function SkyEnvironment({ active, speedRef, theme }) {
       ))}
       <mesh position={theme === 'day' ? [8, 12, -55] : [-8, 10, -55]}>
         <sphereGeometry args={[theme === 'day' ? 2 : 1.2, 16, 16]} />
-        <meshBasicMaterial color={theme === 'day' ? '#fff4a3' : '#dbeafe'} />
+        <meshBasicMaterial color={theme === 'day' ? '#fff4a3' : '#ffffff'} />
       </mesh>
     </>
   )
@@ -81,17 +99,7 @@ function SideScenery({ active, speedRef, theme }) {
 
   return lights.map((light, index) => (
     <group key={index} ref={(node) => (refs.current[index] = node)} position={[light.x, 0, light.z]}>
-      <mesh position={[0, 2, 0]} castShadow>
-        <cylinderGeometry args={[0.06, 0.08, 4, 8]} />
-        <meshStandardMaterial color="#333" flatShading />
-      </mesh>
-      <mesh position={[0, 4, 0]} castShadow>
-        <boxGeometry args={[0.35, 0.15, 0.35]} />
-        <meshStandardMaterial color="#ffd085" emissive="#ffd085" flatShading />
-      </mesh>
-      {theme === 'night' && (
-        <pointLight color="#ffd085" intensity={3} distance={15} position={[0, 4, 0]} />
-      )}
+      <StreetLight theme={theme} />
     </group>
   ))
 }
@@ -457,12 +465,12 @@ function Environment({ active, speedRef }) {
     <>
       <mesh position={[0, -0.57, -35]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[8, 82]} />
-        <meshStandardMaterial color="#6b3e26" flatShading />
+        <meshStandardMaterial color="#332211" flatShading />
       </mesh>
       {planks.map((plank, index) => (
         <mesh key={index} ref={(mesh) => (refs.current[index] = mesh)} position={[0, -0.53, plank.z]} castShadow receiveShadow>
           <boxGeometry args={[7.8, 0.02, 0.06]} />
-          <meshBasicMaterial color="#a66a43" />
+          <meshStandardMaterial color="#a66a43" flatShading />
         </mesh>
       ))}
       <mesh position={[-4, -0.25, -35]} castShadow receiveShadow>
