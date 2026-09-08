@@ -19,6 +19,74 @@ function Camera() {
   return null
 }
 
+function Lighting({ theme }) {
+  const day = theme === 'day'
+  return (
+    <>
+      <color attach="background" args={[day ? '#87CEEB' : '#0B0C10']} />
+      <fog attach="fog" args={[day ? '#87CEEB' : '#0B0C10', 15, 60]} />
+      <ambientLight intensity={day ? 0.8 : 0.3} />
+      <directionalLight
+        position={[10, 20, 10]}
+        intensity={day ? 2 : 1.2}
+        color={day ? '#ffffff' : '#4a90e2'}
+        castShadow
+      />
+    </>
+  )
+}
+
+function SkyEnvironment({ active, speedRef, theme }) {
+  const clouds = useMemo(() => [[-5, -25], [4, -45], [-2, -65]], [])
+  const refs = useRef([])
+
+  useFrame((_, delta) => {
+    if (!active) return
+    refs.current.forEach((cloud) => {
+      cloud.position.z += delta * speedRef.current * 0.2
+      if (cloud.position.z > 6) cloud.position.z = -80
+    })
+  })
+
+  return (
+    <>
+      {clouds.map(([x, z], index) => (
+        <group key={index} ref={(cloud) => (refs.current[index] = cloud)} position={[x, 15, z]}>
+          <mesh><sphereGeometry args={[1.5, 8, 8]} /><meshBasicMaterial color="#ffffff" /></mesh>
+          <mesh position={[1.2, 0, 0]}><sphereGeometry args={[1, 8, 8]} /><meshBasicMaterial color="#ffffff" /></mesh>
+        </group>
+      ))}
+      <mesh position={theme === 'day' ? [8, 12, -55] : [-8, 10, -55]}>
+        <sphereGeometry args={[theme === 'day' ? 2 : 1.2, 16, 16]} />
+        <meshBasicMaterial color={theme === 'day' ? '#fff4a3' : '#dbeafe'} />
+      </mesh>
+    </>
+  )
+}
+
+function SideScenery({ active, speedRef }) {
+  const trees = useMemo(
+    () => Array.from({ length: 12 }, (_, i) => ({ x: i % 2 ? -6 : 6, z: -i * 7 - 8 })),
+    [],
+  )
+  const refs = useRef([])
+
+  useFrame((_, delta) => {
+    if (!active) return
+    refs.current.forEach((tree) => {
+      tree.position.z += delta * speedRef.current
+      if (tree.position.z > 6) tree.position.z = -80
+    })
+  })
+
+  return trees.map((tree, index) => (
+    <group key={index} ref={(node) => (refs.current[index] = node)} position={[tree.x, 0, tree.z]}>
+      <mesh position={[0, 0.8, 0]} castShadow><cylinderGeometry args={[0.15, 0.2, 1.6, 6]} /><meshStandardMaterial color="#6b4226" flatShading /></mesh>
+      <mesh position={[0, 2, 0]} castShadow><coneGeometry args={[0.9, 2.2, 6]} /><meshStandardMaterial color="#2f7d32" flatShading /></mesh>
+    </group>
+  ))
+}
+
 function Mouse({ playerRef, active }) {
   const velocity = useRef(0)
   const grounded = useRef(true)
@@ -42,7 +110,7 @@ function Mouse({ playerRef, active }) {
       if (jump && grounded.current) {
         ducking.current = false
         grounded.current = false
-        velocity.current = 9
+        velocity.current = 12
         playerRef.current.position.y = 0
         setDuck(false)
       }
@@ -73,7 +141,7 @@ function Mouse({ playerRef, active }) {
     if (!active || !playerRef.current) return
     const player = playerRef.current
     if (!grounded.current) {
-      velocity.current -= 22 * delta
+      velocity.current -= 30 * delta
       player.position.y += velocity.current * delta
       if (player.position.y <= 0) {
         player.position.y = 0
@@ -401,7 +469,7 @@ function Environment({ active, speedRef }) {
   )
 }
 
-function GameScene({ active, isPaused, isCaught, baseSpeed, maxSpeed, onScore, onCaught, onCoin }) {
+function GameScene({ active, isPaused, isCaught, theme, baseSpeed, maxSpeed, onScore, onCaught, onCoin }) {
   const player = useRef()
   const cat = useRef()
   const obstacles = useRef([])
@@ -422,10 +490,11 @@ function GameScene({ active, isPaused, isCaught, baseSpeed, maxSpeed, onScore, o
 
     const isDucking = player.current.scale.y < 0.4
 
+    const margin = 0.75
     for (const obstacle of obstacles.current) {
       const hitXZ =
-        Math.abs(player.current.position.x - obstacle.x) < 0.8 &&
-        Math.abs(player.current.position.z - obstacle.z) < 0.8
+        Math.abs(player.current.position.x - obstacle.x) < 0.8 * margin &&
+        Math.abs(player.current.position.z - obstacle.z) < 0.8 * margin
       const hitGround = obstacle.type === 'ground' && hitXZ && player.current.position.y < obstacle.height
       const hitOverhead = obstacle.type === 'overhead' && hitXZ && !isDucking
 
@@ -440,17 +509,9 @@ function GameScene({ active, isPaused, isCaught, baseSpeed, maxSpeed, onScore, o
   return (
     <>
       <Camera />
-      <ambientLight intensity={0.9} />
-      <directionalLight
-        position={[10, 20, 10]}
-        intensity={1.5}
-        castShadow
-        shadow-mapSize={[1024, 1024]}
-        shadow-camera-left={-10}
-        shadow-camera-right={10}
-        shadow-camera-top={15}
-        shadow-camera-bottom={-15}
-      />
+      <Lighting theme={theme} />
+      <SkyEnvironment active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
+      <SideScenery active={active && !isPaused && !isCaught} speedRef={currentSpeed} />
       <Environment active={active && !isPaused && !isCaught} speedRef={currentSpeed} />
       <Mouse playerRef={player} active={active && !isPaused && !isCaught} />
       <Cat catRef={cat} playerRef={player} active={active && !isPaused} isCaught={isCaught} />
@@ -471,7 +532,7 @@ function GameScene({ active, isPaused, isCaught, baseSpeed, maxSpeed, onScore, o
   )
 }
 
-function MainMenu({ onStart, onHighScore, onExit }) {
+function MainMenu({ onStart, onHighScore, onExit, theme, onTheme }) {
   const [difficulty, setDifficulty] = useState('Medium')
   const [speed, setSpeed] = useState(DIFFICULTIES.Medium.baseSpeed)
   const profile = DIFFICULTIES[difficulty]
@@ -491,6 +552,18 @@ function MainMenu({ onStart, onHighScore, onExit }) {
         </div>
 
         <div className="mt-8">
+          <p className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-500">Theme</p>
+          <div className="mb-6 grid grid-cols-2 gap-2">
+            {['day', 'night'].map((mode) => (
+              <button
+                key={mode}
+                onClick={() => onTheme(mode)}
+                className={`border px-3 py-2 text-sm font-bold capitalize transition ${theme === mode ? 'border-cyan-300 bg-cyan-400 text-slate-950' : 'border-slate-700 text-slate-300 hover:border-cyan-300'}`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
           <p className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-500">Difficulty</p>
           <div className="grid grid-cols-3 gap-2">
             {Object.keys(DIFFICULTIES).map((name) => (
@@ -581,6 +654,7 @@ export default function App() {
   const [coinCount, setCoinCount] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
   const [isCaught, setIsCaught] = useState(false)
+  const [theme, setTheme] = useState('day')
   const catchTimer = useRef()
   const [best, setBest] = useState(() => readBest())
   const [run, setRun] = useState(0)
@@ -626,7 +700,7 @@ export default function App() {
   useEffect(() => () => clearTimeout(catchTimer.current), [])
 
   if (screen === 'menu') {
-    return <MainMenu onStart={start} onHighScore={() => { setBest(readBest()); setScreen('highscore') }} onExit={() => setScreen('exit')} />
+    return <MainMenu theme={theme} onTheme={setTheme} onStart={start} onHighScore={() => { setBest(readBest()); setScreen('highscore') }} onExit={() => setScreen('exit')} />
   }
 
   if (screen === 'highscore') return <HighScore score={best} onBack={() => setScreen('menu')} />
@@ -635,13 +709,12 @@ export default function App() {
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-[#070b1a]">
       <Canvas shadows camera={{ position: [0, 3.5, 7], fov: 55 }}>
-        <color attach="background" args={['#1a1a2e']} />
-        <fog attach="fog" args={['#1a1a2e', 15, 60]} />
         <GameScene
           key={run}
           active={screen === 'playing'}
           isPaused={isPaused}
           isCaught={isCaught}
+          theme={theme}
           baseSpeed={settings.baseSpeed}
           maxSpeed={settings.maxSpeed}
           onScore={setScore}
