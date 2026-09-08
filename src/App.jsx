@@ -708,11 +708,11 @@ function MainMenu({ onStart, onHighScore, onExit, theme, onTheme }) {
   }
 
   return (
-    <div className="font-cartoon flex min-h-screen w-full items-center justify-center px-4 py-8 text-white sm:px-6">
-      <div className="w-full max-w-md rounded-2xl border border-[#ffca28]/35 bg-black/40 p-8 shadow-xl backdrop-blur-md sm:p-10">
+    <div className="font-cartoon flex min-h-screen w-full items-center justify-center px-4 py-8 text-white sm:px-6" style={{ perspective: '1000px' }}>
+      <div className="menu-float w-full max-w-md rounded-2xl border border-[#ffca28]/35 bg-black/40 p-8 shadow-xl backdrop-blur-md sm:p-10">
         <div className="text-center">
           <p className="font-mono text-xs uppercase tracking-[0.35em] text-yellow-300">Cheese Chase</p>
-          <h1 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Cheese Chase</h1>
+          <h1 className="menu-title mt-3 text-4xl font-black tracking-tight sm:text-5xl">Cheese Chase</h1>
           <p className="mt-4 text-sm leading-6 text-slate-400">Dodge the blocks and stay on the road.</p>
         </div>
 
@@ -759,8 +759,8 @@ function MainMenu({ onStart, onHighScore, onExit, theme, onTheme }) {
         <p className="mt-4 text-center text-xs text-slate-500">Max speed: {profile.maxSpeed} · A/D or ←/→ to move</p>
         <div className="mt-6 space-y-3">
           <button onClick={() => onStart({ baseSpeed: speed, maxSpeed: profile.maxSpeed })} className="menu-button">Start Game</button>
-          <button onClick={onHighScore} className="menu-button">High Score</button>
-          <button onClick={onExit} className="menu-button">Exit Game</button>
+          <button onClick={onHighScore} className="menu-button menu-button-secondary">High Score</button>
+          <button onClick={onExit} className="menu-button menu-button-secondary">Exit Game</button>
         </div>
       </div>
     </div>

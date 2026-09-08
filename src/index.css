@@ -25,7 +25,24 @@ button {
   font-family: "Fredoka", "Trebuchet MS", sans-serif;
 }
 
+.menu-title {
+  text-shadow: 0 3px 0 #7c2d12, 0 5px 12px rgb(0 0 0 / 35%);
+}
+
+.menu-float {
+  animation: menu-float 4s ease-in-out infinite;
+}
+
+@keyframes menu-float {
+  0%, 100% { transform: rotateX(5deg) rotateY(-5deg) translateY(0); }
+  50% { transform: rotateX(5deg) rotateY(-5deg) translateY(-6px); }
+}
+
 .menu-button {
-  @apply w-full rounded-xl border border-[#ffca28] bg-[#ffca28] px-4 py-3 font-bold text-[#3b2117] shadow-md transition hover:bg-[#ffd95a];
+  @apply w-full rounded-xl border-2 border-[#f59e0b] bg-[#fbbf24] px-4 py-3 font-bold text-black shadow-[0_8px_0_0_#b45309] transition-all hover:bg-[#fcd34d] active:translate-y-2 active:shadow-none;
   font-family: "Fredoka", "Trebuchet MS", sans-serif;
+}
+
+.menu-button-secondary {
+  @apply border-[#6b4426] bg-[#8b5a2b] text-white shadow-[0_8px_0_0_#3e2723] hover:bg-[#a66a43];
 }
