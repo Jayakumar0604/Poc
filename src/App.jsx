@@ -99,26 +99,64 @@ function SkyEnvironment({ active, speedRef, theme }) {
   )
 }
 
+function LowPolyTree() {
+  return (
+    <group>
+      <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.2, 0.3, 1, 5]} />
+        <meshStandardMaterial color="#7b4a2f" flatShading />
+      </mesh>
+      <mesh position={[0, 1.5, 0]} castShadow receiveShadow>
+        <coneGeometry args={[1.2, 2.5, 5]} />
+        <meshStandardMaterial color="#4f9b45" flatShading />
+      </mesh>
+    </group>
+  )
+}
+
 function SideScenery({ active, speedRef, theme }) {
   const lights = useMemo(
-    () => Array.from({ length: 8 }, (_, i) => ({ x: i % 2 ? -4 : 4, z: -i * 10 - 8 })),
+    () => Array.from({ length: 8 }, (_, i) => ({ x: i % 2 ? -3.5 : 3.5, z: -i * 10 - 8 })),
     [],
   )
-  const refs = useRef([])
+  const trees = useMemo(
+    () => Array.from({ length: 12 }, (_, i) => {
+      const left = i % 2 === 0
+      const offset = ((i * 37) % 100) / 100 * 4
+      const x = left ? -10 + offset : 6 + offset
+      return { x, z: -i * 8 - 12 }
+    }),
+    [],
+  )
+  const lampRefs = useRef([])
+  const treeRefs = useRef([])
 
   useFrame((_, delta) => {
     if (!active) return
-    refs.current.forEach((light) => {
-      light.position.z += delta * speedRef.current
-      if (light.position.z > 6) light.position.z = -80
+    lampRefs.current.forEach((lamp) => {
+      lamp.position.z += delta * speedRef.current
+      if (lamp.position.z > 6) lamp.position.z = -80
+    })
+    treeRefs.current.forEach((tree) => {
+      tree.position.z += delta * speedRef.current
+      if (tree.position.z > 6) tree.position.z = -90
     })
   })
 
-  return lights.map((light, index) => (
-    <group key={index} ref={(node) => (refs.current[index] = node)} position={[light.x, 0, light.z]}>
-      <TableLamp theme={theme} />
-    </group>
-  ))
+  return (
+    <>
+      {lights.map((light, index) => (
+        <group key={`lamp-${index}`} ref={(node) => (lampRefs.current[index] = node)} position={[light.x, 0, light.z]}>
+          <TableLamp theme={theme} />
+        </group>
+      ))}
+      {trees.map((tree, index) => (
+        <group key={`tree-${index}`} ref={(node) => (treeRefs.current[index] = node)} position={[tree.x, 0, tree.z]}>
+          <LowPolyTree />
+        </group>
+      ))}
+    </>
+  )
 }
 
 function MenuDecor() {
@@ -625,11 +663,11 @@ function Environment({ active, speedRef }) {
 
   return (
     <>
-      <mesh position={[-4.25, 2.1, -35]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
+      <mesh position={[-5, 2, -35]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
         <planeGeometry args={[82, 5]} />
         <meshStandardMaterial color="#f3dfb3" side={DoubleSide} flatShading />
       </mesh>
-      <mesh position={[4.25, 2.1, -35]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
+      <mesh position={[5, 2, -35]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
         <planeGeometry args={[82, 5]} />
         <meshStandardMaterial color="#d8eee1" side={DoubleSide} flatShading />
       </mesh>
@@ -650,11 +688,11 @@ function Environment({ active, speedRef }) {
           <meshStandardMaterial color="#e9b872" flatShading />
         </mesh>
       ))}
-      <mesh position={[-4, -0.25, -35]} castShadow receiveShadow>
+      <mesh position={[-5, -0.25, -35]} castShadow receiveShadow>
         <boxGeometry args={[0.2, 0.6, 82]} />
         <meshStandardMaterial color="#fff1d6" flatShading />
       </mesh>
-      <mesh position={[4, -0.25, -35]} castShadow receiveShadow>
+      <mesh position={[5, -0.25, -35]} castShadow receiveShadow>
         <boxGeometry args={[0.2, 0.6, 82]} />
         <meshStandardMaterial color="#fff1d6" flatShading />
       </mesh>
