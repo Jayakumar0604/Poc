@@ -64,25 +64,34 @@ function SkyEnvironment({ active, speedRef, theme }) {
   )
 }
 
-function SideScenery({ active, speedRef }) {
-  const trees = useMemo(
-    () => Array.from({ length: 12 }, (_, i) => ({ x: i % 2 ? -6 : 6, z: -i * 7 - 8 })),
+function SideScenery({ active, speedRef, theme }) {
+  const lights = useMemo(
+    () => Array.from({ length: 8 }, (_, i) => ({ x: i % 2 ? -4 : 4, z: -i * 10 - 8 })),
     [],
   )
   const refs = useRef([])
 
   useFrame((_, delta) => {
     if (!active) return
-    refs.current.forEach((tree) => {
-      tree.position.z += delta * speedRef.current
-      if (tree.position.z > 6) tree.position.z = -80
+    refs.current.forEach((light) => {
+      light.position.z += delta * speedRef.current
+      if (light.position.z > 6) light.position.z = -80
     })
   })
 
-  return trees.map((tree, index) => (
-    <group key={index} ref={(node) => (refs.current[index] = node)} position={[tree.x, 0, tree.z]}>
-      <mesh position={[0, 0.8, 0]} castShadow><cylinderGeometry args={[0.15, 0.2, 1.6, 6]} /><meshStandardMaterial color="#6b4226" flatShading /></mesh>
-      <mesh position={[0, 2, 0]} castShadow><coneGeometry args={[0.9, 2.2, 6]} /><meshStandardMaterial color="#2f7d32" flatShading /></mesh>
+  return lights.map((light, index) => (
+    <group key={index} ref={(node) => (refs.current[index] = node)} position={[light.x, 0, light.z]}>
+      <mesh position={[0, 2, 0]} castShadow>
+        <cylinderGeometry args={[0.06, 0.08, 4, 8]} />
+        <meshStandardMaterial color="#333" flatShading />
+      </mesh>
+      <mesh position={[0, 4, 0]} castShadow>
+        <boxGeometry args={[0.35, 0.15, 0.35]} />
+        <meshStandardMaterial color="#ffd085" emissive="#ffd085" flatShading />
+      </mesh>
+      {theme === 'night' && (
+        <pointLight color="#ffd085" intensity={3} distance={15} position={[0, 4, 0]} />
+      )}
     </group>
   ))
 }
@@ -94,7 +103,7 @@ function Mouse({ playerRef, active }) {
   const setDuck = useCallback((value) => {
     const player = playerRef.current
     if (!player) return
-    player.scale.set(0.4, value ? 0.2 : 0.4, 0.4)
+    player.scale.set(1, value ? 0.5 : 1, 1)
     player.position.y = value ? -0.1 : 0
   }, [playerRef])
 
@@ -153,7 +162,7 @@ function Mouse({ playerRef, active }) {
   })
 
   return (
-    <group ref={playerRef} position={[0, 0, 0]} scale={[0.4, 0.4, 0.4]}>
+    <group ref={playerRef} position={[0, 0, 0]} scale={[1, 1, 1]}>
       <mesh scale={[1, 1, 1.5]} castShadow receiveShadow>
         <sphereGeometry args={[0.2, 16, 16]} />
         <meshStandardMaterial color="#777" flatShading />
@@ -244,30 +253,30 @@ function Cat({ catRef, playerRef, active, isCaught }) {
   )
 }
 
-function Obstacle({ item, obstacleRef }) {
+function Obstacle({ type, position, obstacleRef }) {
+  const materials = useMemo(() => ({ pit: '#080808', truck: '#4b5563', wheel: '#111' }), [])
+
+  if (type === 'pit') {
+    return (
+      <mesh ref={obstacleRef} position={position} castShadow receiveShadow>
+        <boxGeometry args={[1.5, 0.05, 1.5]} />
+        <meshStandardMaterial color={materials.pit} flatShading />
+      </mesh>
+    )
+  }
+
   return (
-    <group ref={obstacleRef} position={[item.x, item.y, item.z]}>
-      {item.type === 'ground' ? (
-        <>
-          <mesh castShadow receiveShadow>
-            <boxGeometry args={[1, 0.05, 1.2]} />
-            <meshStandardMaterial color="#8b5a2b" flatShading />
-          </mesh>
-          <mesh position={[0, 0.08, 0]} rotation={[0, 0, Math.PI / 2]} castShadow receiveShadow>
-            <cylinderGeometry args={[0.03, 0.03, 0.9]} />
-            <meshStandardMaterial color="#c0c0c0" flatShading />
-          </mesh>
-          <mesh position={[0, 0.08, 0]} castShadow receiveShadow>
-            <boxGeometry args={[0.14, 0.06, 0.14]} />
-            <meshStandardMaterial color="#ffcc00" flatShading />
-          </mesh>
-        </>
-      ) : (
-        <mesh castShadow receiveShadow>
-          <cylinderGeometry args={[0.25, 0.25, 2.5, 16]} />
-          <meshStandardMaterial color="#5b351f" flatShading />
+    <group ref={obstacleRef} position={position}>
+      <mesh position={[0, 1.5, 0]} castShadow receiveShadow>
+        <boxGeometry args={[1.8, 1.2, 1.4]} />
+        <meshStandardMaterial color={materials.truck} flatShading />
+      </mesh>
+      {[-0.65, 0.65].flatMap((x) => [-0.5, 0.5].map((z) => (
+        <mesh key={`${x}-${z}`} position={[x, 0, z]} rotation={[0, 0, Math.PI / 2]} castShadow>
+          <cylinderGeometry args={[0.22, 0.22, 0.18, 8]} />
+          <meshStandardMaterial color={materials.wheel} flatShading />
         </mesh>
-      )}
+      )))}
     </group>
   )
 }
@@ -275,8 +284,8 @@ function Obstacle({ item, obstacleRef }) {
 function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
   const items = useMemo(
     () => Array.from({ length: 9 }, (_, i) => {
-      const type = i % 2 ? 'overhead' : 'ground'
-      return { type, height: type === 'overhead' ? 2.5 : 0.4, x: LANES[i % 3], y: type === 'overhead' ? 2.25 : 0.1, z: -8 - i * 7 }
+      const type = i % 2 ? 'truck' : 'pit'
+      return { type, x: LANES[i % 3], z: -8 - i * 7 }
     }),
     [],
   )
@@ -296,18 +305,17 @@ function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
         const spawnDistance = Math.max(38, 72 - (speedRef.current - baseSpeed) * 2)
         item.z = -(spawnDistance + Math.random() * 16)
         item.x = LANES[Math.floor(Math.random() * LANES.length)]
-        item.type = Math.random() < 0.5 ? 'overhead' : 'ground'
-        item.height = item.type === 'overhead' ? 2.5 : 0.4
-        item.y = item.type === 'overhead' ? 2.25 : 0.1
+        item.type = Math.random() < 0.5 ? 'truck' : 'pit'
       }
-      mesh.position.set(item.x, item.y, item.z)
+      mesh.position.set(item.x, 0, item.z)
     })
   })
 
   return items.map((item, index) => (
     <Obstacle
       key={index}
-      item={item}
+      type={item.type}
+      position={[item.x, 0, item.z]}
       obstacleRef={(mesh) => (refs.current[index] = mesh)}
     />
   ))
@@ -488,17 +496,16 @@ function GameScene({ active, isPaused, isCaught, theme, baseSpeed, maxSpeed, onS
       onScore(lastScore.current)
     }
 
-    const isDucking = player.current.scale.y < 0.4
-
-    const margin = 0.75
     for (const obstacle of obstacles.current) {
-      const hitXZ =
-        Math.abs(player.current.position.x - obstacle.x) < 0.8 * margin &&
-        Math.abs(player.current.position.z - obstacle.z) < 0.8 * margin
-      const hitGround = obstacle.type === 'ground' && hitXZ && player.current.position.y < obstacle.height
-      const hitOverhead = obstacle.type === 'overhead' && hitXZ && !isDucking
+      const px = player.current.position.x
+      const pz = player.current.position.z
+      const ox = obstacle.x
+      const oz = obstacle.z
+      const hitXZ = Math.abs(px - ox) < 0.6 && Math.abs(pz - oz) < 0.6
+      const hitPit = obstacle.type === 'pit' && hitXZ && player.current.position.y < 0.5
+      const hitTruck = obstacle.type === 'truck' && hitXZ && player.current.scale.y === 1
 
-      if (hitGround || hitOverhead) {
+      if (hitPit || hitTruck) {
         ended.current = true
         onCaught(score.current)
         break
@@ -511,7 +518,7 @@ function GameScene({ active, isPaused, isCaught, theme, baseSpeed, maxSpeed, onS
       <Camera />
       <Lighting theme={theme} />
       <SkyEnvironment active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
-      <SideScenery active={active && !isPaused && !isCaught} speedRef={currentSpeed} />
+      <SideScenery active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
       <Environment active={active && !isPaused && !isCaught} speedRef={currentSpeed} />
       <Mouse playerRef={player} active={active && !isPaused && !isCaught} />
       <Cat catRef={cat} playerRef={player} active={active && !isPaused} isCaught={isCaught} />
