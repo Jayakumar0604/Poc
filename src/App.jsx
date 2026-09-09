@@ -8,6 +8,7 @@ const LANES = [-2.4, 0, 2.4]
 const GROUND_Y = -0.57
 const MOUSE_GROUND_Y = GROUND_Y + 0.2
 const CAT_GROUND_Y = GROUND_Y + 0.55
+const CHEESE_GROUND_Y = GROUND_Y + 0.3
 const DIFFICULTIES = {
   Easy: { baseSpeed: 3, maxSpeed: 12 },
   Medium: { baseSpeed: 6, maxSpeed: 18 },
@@ -483,16 +484,12 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, onCollect, on
   const z = useRef(coin.z)
   const collected = useRef(false)
 
-  useFrame((state, delta) => {
+  useFrame((_, delta) => {
     if (!active || collected.current) return
     z.current += delta * speedRef.current
     onMove(coin.id, coin.x, z.current)
     ref.current.rotation.y += delta * 2
-    ref.current.position.set(
-      coin.x,
-      coin.y + Math.sin(state.clock.elapsedTime * 5) * 0.1,
-      z.current,
-    )
+    ref.current.position.set(coin.x, coin.y, z.current)
     if (z.current > 6) {
       collected.current = true
       onRemove(coin.id)
@@ -547,7 +544,7 @@ function makeCoinLine(obstacles, positions, nextId, coinsSpawned) {
     return {
       id: nextId.current++,
       x: lane,
-      y: 0.8,
+      y: CHEESE_GROUND_Y,
       z,
       superCoin,
       value: superCoin ? 20 : 5,
