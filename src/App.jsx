@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { EffectComposer, SSAO } from '@react-three/postprocessing'
-import { CanvasTexture, DoubleSide, RepeatWrapping } from 'three'
+import { CanvasTexture, RepeatWrapping } from 'three'
 
 const KEY = 'endless-runner-high-score'
 const LANES = [-2.4, 0, 2.4]
@@ -9,6 +9,7 @@ const GROUND_Y = -0.57
 const MOUSE_GROUND_Y = GROUND_Y + 0.2
 const CAT_GROUND_Y = GROUND_Y + 0.55
 const CHEESE_GROUND_Y = GROUND_Y + 0.3
+const OVERHEAD_TYPES = ['table', 'pencils', 'book']
 const DIFFICULTIES = {
   Easy: { baseSpeed: 3, maxSpeed: 12 },
   Medium: { baseSpeed: 6, maxSpeed: 18 },
@@ -149,6 +150,22 @@ function SideScenery({ active, speedRef, theme }) {
 
   return (
     <>
+      <mesh position={[-4.5, GROUND_Y + 0.4, 0]} castShadow receiveShadow>
+        <boxGeometry args={[1.2, 0.8, 100]} />
+        <meshStandardMaterial color="#8a542f" roughness={0.9} flatShading />
+      </mesh>
+      <mesh position={[4.5, GROUND_Y + 0.4, 0]} castShadow receiveShadow>
+        <boxGeometry args={[1.2, 0.8, 100]} />
+        <meshStandardMaterial color="#8a542f" roughness={0.9} flatShading />
+      </mesh>
+      <mesh position={[-4.5, GROUND_Y + 2.8, 0]} receiveShadow>
+        <boxGeometry args={[1, 4, 100]} />
+        <meshStandardMaterial color="#f7e5c5" roughness={0.9} flatShading />
+      </mesh>
+      <mesh position={[4.5, GROUND_Y + 2.8, 0]} receiveShadow>
+        <boxGeometry args={[1, 4, 100]} />
+        <meshStandardMaterial color="#d2e6d4" roughness={0.9} flatShading />
+      </mesh>
       {lights.map((light, index) => (
         <group key={`lamp-${index}`} ref={(node) => (lampRefs.current[index] = node)} position={[light.x, GROUND_Y, light.z]}>
           <TableLamp theme={theme} />
@@ -392,18 +409,39 @@ function Cat({ catRef, playerRef, active, isCaught }) {
 
 function Obstacle({ type, position, obstacleRef }) {
   const materials = useMemo(() => ({
-    book: '#4f86c6',
+    book: '#3478c5',
     milk: '#fff7e6',
     trap: '#d64545',
     table: '#b7794b',
+    pencil: '#ffd43b',
+    ruler: '#8a542f',
   }), [])
+
+  if (type === 'pencils') {
+    return (
+      <group ref={obstacleRef} position={position}>
+        {[-1, 1].map((x) => (
+          <mesh key={x} position={[x, 0.75, 0]} castShadow receiveShadow>
+            <cylinderGeometry args={[0.08, 0.08, 1.5, 6]} />
+            <meshStandardMaterial color={materials.pencil} flatShading />
+          </mesh>
+        ))}
+        <mesh position={[0, 1.5, 0]} castShadow receiveShadow>
+          <boxGeometry args={[2.5, 0.05, 0.4]} />
+          <meshStandardMaterial color={materials.ruler} flatShading />
+        </mesh>
+      </group>
+    )
+  }
 
   if (type === 'book') {
     return (
-      <mesh ref={obstacleRef} position={[position[0], position[1] + 0.12, position[2]]} rotation={[0, 0.2, 0]} castShadow receiveShadow>
-        <boxGeometry args={[1.4, 0.24, 1.1]} />
-        <meshStandardMaterial color={materials.book} flatShading />
-      </mesh>
+      <group ref={obstacleRef} position={position}>
+        <mesh position={[0, 1.2, 0]} rotation={[0, 0, Math.PI / 12]} castShadow receiveShadow>
+          <boxGeometry args={[2.5, 0.2, 1.5]} />
+          <meshStandardMaterial color={materials.book} flatShading />
+        </mesh>
+      </group>
     )
   }
 
@@ -450,7 +488,7 @@ function Obstacle({ type, position, obstacleRef }) {
 function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
   const items = useMemo(
     () => Array.from({ length: 9 }, (_, i) => {
-      const type = i % 2 ? 'table' : ['book', 'milk', 'trap'][i % 3]
+      const type = i % 2 ? OVERHEAD_TYPES[i % OVERHEAD_TYPES.length] : ['milk', 'trap'][i % 2]
       return { type, x: LANES[i % 3], z: -8 - i * 7 }
     }),
     [],
@@ -471,7 +509,9 @@ function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
         const spawnDistance = Math.max(38, 72 - (speedRef.current - baseSpeed) * 2)
         item.z = -(spawnDistance + Math.random() * 16)
         item.x = LANES[Math.floor(Math.random() * LANES.length)]
-        item.type = Math.random() < 0.5 ? 'table' : ['book', 'milk', 'trap'][Math.floor(Math.random() * 3)]
+        item.type = Math.random() < 0.5
+          ? OVERHEAD_TYPES[Math.floor(Math.random() * OVERHEAD_TYPES.length)]
+          : ['milk', 'trap'][Math.floor(Math.random() * 2)]
       }
       mesh.position.set(item.x, GROUND_Y, item.z)
     })
@@ -687,30 +727,6 @@ function Environment({ active, speedRef }) {
 
   return (
     <>
-      <mesh position={[-5, 2, -35]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
-        <planeGeometry args={[82, 5]} />
-        <meshStandardMaterial color="#f7dfb5" side={DoubleSide} roughness={0.9} flatShading />
-      </mesh>
-      <mesh position={[5, 2, -35]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
-        <planeGeometry args={[82, 5]} />
-        <meshStandardMaterial color="#c9e4cf" side={DoubleSide} roughness={0.9} flatShading />
-      </mesh>
-      <mesh position={[-4.92, 0.03, -35]} castShadow receiveShadow>
-        <boxGeometry args={[0.12, 1.2, 82]} />
-        <meshStandardMaterial color="#f0c49b" roughness={0.9} flatShading />
-      </mesh>
-      <mesh position={[4.92, 0.03, -35]} castShadow receiveShadow>
-        <boxGeometry args={[0.12, 1.2, 82]} />
-        <meshStandardMaterial color="#a9cdb2" roughness={0.9} flatShading />
-      </mesh>
-      <mesh position={[-4.88, 0.65, -35]} castShadow>
-        <boxGeometry args={[0.18, 0.12, 82]} />
-        <meshStandardMaterial color="#fff8e7" flatShading />
-      </mesh>
-      <mesh position={[4.88, 0.65, -35]} castShadow>
-        <boxGeometry args={[0.18, 0.12, 82]} />
-        <meshStandardMaterial color="#fff8e7" flatShading />
-      </mesh>
       <KitchenProps />
       <mesh position={[0, GROUND_Y, -35]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow={true}>
         <planeGeometry args={[8, 82]} />
@@ -728,14 +744,6 @@ function Environment({ active, speedRef }) {
           <meshStandardMaterial color="#e9b872" flatShading />
         </mesh>
       ))}
-      <mesh position={[-5, -0.25, -35]} castShadow receiveShadow>
-        <boxGeometry args={[0.2, 0.6, 82]} />
-        <meshStandardMaterial color="#fff1d6" flatShading />
-      </mesh>
-      <mesh position={[5, -0.25, -35]} castShadow receiveShadow>
-        <boxGeometry args={[0.2, 0.6, 82]} />
-        <meshStandardMaterial color="#fff1d6" flatShading />
-      </mesh>
     </>
   )
 }
@@ -766,10 +774,10 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       const ox = obstacle.x
       const oz = obstacle.z
       const hitXZ = Math.abs(px - ox) < 0.6 && Math.abs(pz - oz) < 0.6
-      const hitJumpObject = ['book', 'milk', 'trap'].includes(obstacle.type) && hitXZ && player.current.position.y < 0.5
-      const hitTable = obstacle.type === 'table' && hitXZ && player.current.scale.y === 1
+      const hitJumpObject = ['milk', 'trap'].includes(obstacle.type) && hitXZ && player.current.position.y < 0.5
+      const hitOverhead = OVERHEAD_TYPES.includes(obstacle.type) && hitXZ && player.current.scale.y === 1
 
-      if (hitCooldown.current === 0 && (hitJumpObject || hitTable)) {
+      if (hitCooldown.current === 0 && (hitJumpObject || hitOverhead)) {
         hitCooldown.current = 1.5
         obstacle.z = 2
         onCaught(score.current)
