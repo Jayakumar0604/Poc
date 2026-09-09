@@ -213,11 +213,16 @@ function MenuDecor() {
 }
 
 function Mouse({ playerRef, active, cinematic }) {
+  const mouseRef = useRef()
   const velocity = useRef(0)
   const grounded = useRef(true)
   const ducking = useRef(false)
+  const attachMouse = useCallback((node) => {
+    mouseRef.current = node
+    playerRef.current = node
+  }, [playerRef])
   const setDuck = useCallback((value) => {
-    const player = playerRef.current
+    const player = mouseRef.current
     if (!player) return
     player.scale.set(1, value ? 0.5 : 1, 1)
     player.position.y = value ? GROUND_Y + 0.1 : MOUSE_GROUND_Y
@@ -262,9 +267,9 @@ function Mouse({ playerRef, active, cinematic }) {
     }
   }, [active, playerRef, setDuck])
 
-  useFrame((_, delta) => {
-    if (!active || !playerRef.current) return
-    const player = playerRef.current
+  useFrame((state, delta) => {
+    if (!active || !mouseRef.current) return
+    const player = mouseRef.current
     if (!grounded.current) {
       velocity.current -= 30 * delta
       player.position.y += velocity.current * delta
@@ -274,11 +279,15 @@ function Mouse({ playerRef, active, cinematic }) {
         grounded.current = true
       }
     }
-    if (grounded.current) setDuck(ducking.current)
+    if (grounded.current) {
+      setDuck(ducking.current)
+      mouseRef.current.rotation.z = Math.sin(state.clock.elapsedTime * 15) * 0.1
+      mouseRef.current.position.y = (ducking.current ? GROUND_Y + 0.1 : MOUSE_GROUND_Y) + Math.abs(Math.sin(state.clock.elapsedTime * 15)) * 0.05
+    }
   })
 
   return (
-    <group ref={playerRef} position={cinematic ? [-2.4, MOUSE_GROUND_Y, 1.5] : [0, MOUSE_GROUND_Y, 0]} scale={[1, 1, 1]}>
+    <group ref={attachMouse} position={cinematic ? [-2.4, MOUSE_GROUND_Y, 1.5] : [0, MOUSE_GROUND_Y, 0]} scale={[1, 1, 1]}>
       <mesh scale={[1, 1, 1.5]} castShadow receiveShadow>
         <sphereGeometry args={[0.2, 16, 16]} />
         <meshStandardMaterial color="#777" flatShading />
@@ -331,6 +340,9 @@ function Cat({ catRef, playerRef, active, isCaught }) {
     } else {
       cat.visible = false
     }
+
+    cat.rotation.z = Math.sin(state.clock.elapsedTime * 20) * 0.15
+    cat.position.y = CAT_GROUND_Y + Math.abs(Math.sin(state.clock.elapsedTime * 20)) * 0.1
   })
 
   return (
@@ -471,12 +483,16 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, onCollect, on
   const z = useRef(coin.z)
   const collected = useRef(false)
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     if (!active || collected.current) return
     z.current += delta * speedRef.current
     onMove(coin.id, coin.x, z.current)
-    ref.current.rotation.y += delta * 7
-    ref.current.position.set(coin.x, coin.y, z.current)
+    ref.current.rotation.y += delta * 2
+    ref.current.position.set(
+      coin.x,
+      coin.y + Math.sin(state.clock.elapsedTime * 5) * 0.1,
+      z.current,
+    )
     if (z.current > 6) {
       collected.current = true
       onRemove(coin.id)
