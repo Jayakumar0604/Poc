@@ -12,6 +12,7 @@ const CHEESE_GROUND_Y = GROUND_Y + 0.3
 const OVERHEAD_TYPES = ['table', 'pencils', 'book']
 const MOVING_TYPES = ['milk', 'mousetrap', 'yarn']
 const MIN_OBJECT_GAP = 10
+const INITIAL_CHEESE_REQUESTS = 4
 const chooseSpawnType = () => {
   const rand = Math.random()
   return rand > 0.4 ? 'obstacle' : (rand > 0.05 ? 'cheese' : 'milk')
@@ -22,9 +23,13 @@ const DIFFICULTIES = {
   Hard: { baseSpeed: 9, maxSpeed: 26 },
 }
 const readBest = () => Number(localStorage.getItem(KEY)) || 0
-const coinFits = (z, obstacles, positions) => (
-  obstacles.every((obstacle) => Math.abs(obstacle.z - z) >= MIN_OBJECT_GAP) &&
-  [...positions.values()].every((other) => Math.abs(other.z - z) >= MIN_OBJECT_GAP)
+const coinFits = (z, lane, obstacles, positions) => (
+  obstacles.every((obstacle) => (
+    Math.abs(obstacle.x - lane) >= 0.9 || Math.abs(obstacle.z - z) >= MIN_OBJECT_GAP
+  )) &&
+  [...positions.values()].every((other) => (
+    Math.abs(other.x - lane) >= 0.9 || Math.abs(other.z - z) >= MIN_OBJECT_GAP
+  ))
 )
 
 function Camera({ isCaught, cinematic }) {
@@ -649,12 +654,12 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, onCollect, on
   )
 }
 
-function makeCoinLine(obstacles, positions, nextId, coinsSpawned, playerRef) {
-  const count = 3 + Math.floor(Math.random() * 2)
-  const startZ = playerRef.current.position.z - 80 - Math.random() * 20
+function makeCoinLine(obstacles, positions, nextId, coinsSpawned, playerRef, startDistance = 80) {
+  const count = startDistance === 80 ? 3 + Math.floor(Math.random() * 2) : 3
+  const startZ = playerRef.current.position.z - startDistance - Math.random() * (startDistance === 80 ? 20 : 4)
   const zValues = Array.from({ length: count }, (_, i) => startZ - i * MIN_OBJECT_GAP)
-  if (!zValues.every((z) => coinFits(z, obstacles, positions))) return []
   const lane = LANES[Math.floor(Math.random() * LANES.length)]
+  if (!zValues.every((z) => coinFits(z, lane, obstacles, positions))) return []
   return zValues.map((z) => {
     const superCoin = coinsSpawned.current++ % 11 === 10
     return {
@@ -690,7 +695,8 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, 
     if (!active) return
     timer.current -= delta
     if (timer.current > 0 || cheeseRequests.current === 0) return
-    const line = makeCoinLine(obstaclesRef.current, positions.current, nextId, coinsSpawned, playerRef)
+    const startDistance = live.current.length === 0 ? 5 : 80
+    const line = makeCoinLine(obstaclesRef.current, positions.current, nextId, coinsSpawned, playerRef, startDistance)
     if (!line.length) return
     // oxlint-disable-next-line react/immutability
     cheeseRequests.current -= 1
@@ -831,7 +837,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
   const currentSpeed = useRef(baseSpeed)
   const playerStats = useRef({ hits: 0, lastHitTime: 0, invincibleUntil: 0 })
   const coinPositions = useRef(new Map())
-  const cheeseRequests = useRef(2)
+  const cheeseRequests = useRef(INITIAL_CHEESE_REQUESTS)
 
   useFrame((state, delta) => {
     if (isPaused || isCaught) return
