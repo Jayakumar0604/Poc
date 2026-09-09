@@ -4,14 +4,18 @@ import { EffectComposer, SSAO } from '@react-three/postprocessing'
 import { CanvasTexture, MathUtils, RepeatWrapping } from 'three'
 
 const KEY = 'endless-runner-high-score'
-const LANES = [-2.4, 0, 2.4]
+const LANES = [-1.5, 0, 1.5]
 const GROUND_Y = -0.57
 const MOUSE_GROUND_Y = GROUND_Y + 0.2
 const CAT_GROUND_Y = GROUND_Y + 0.55
 const CHEESE_GROUND_Y = GROUND_Y + 0.3
 const OVERHEAD_TYPES = ['table', 'pencils', 'book']
-const MOVING_TYPES = ['milk', 'mousetrap', 'yarn', 'milkBowl']
+const MOVING_TYPES = ['milk', 'mousetrap', 'yarn']
 const MIN_OBJECT_GAP = 10
+const chooseSpawnType = () => {
+  const rand = Math.random()
+  return rand > 0.4 ? 'obstacle' : (rand > 0.05 ? 'cheese' : 'milk')
+}
 const DIFFICULTIES = {
   Easy: { baseSpeed: 3, maxSpeed: 12 },
   Medium: { baseSpeed: 6, maxSpeed: 18 },
@@ -429,13 +433,11 @@ function Cat({ catRef, playerRef, playerStats, active, isCaught }) {
   )
 }
 
-function Yarn({ position, obstacleRef, onMove }) {
+function Yarn({ position, obstacleRef }) {
   const ref = useRef()
   useFrame((state) => {
     if (!ref.current) return
-    const x = Math.sin(state.clock.elapsedTime * 3) * 2
-    ref.current.position.x = x
-    onMove(x)
+    ref.current.rotation.y = state.clock.elapsedTime * 2
   })
 
   return (
@@ -455,7 +457,7 @@ function MilkBowl({ position, obstacleRef }) {
   )
 }
 
-function Obstacle({ type, position, obstacleRef, onMove }) {
+function Obstacle({ type, position, obstacleRef }) {
   const materials = useMemo(() => ({
     book: '#3478c5',
     milk: '#fff7e6',
@@ -465,7 +467,8 @@ function Obstacle({ type, position, obstacleRef, onMove }) {
     ruler: '#8a542f',
   }), [])
 
-  if (type === 'yarn') return <Yarn position={position} obstacleRef={obstacleRef} onMove={onMove} />
+  if (type === 'empty') return null
+  if (type === 'yarn') return <Yarn position={position} obstacleRef={obstacleRef} />
   if (type === 'milkBowl') return <MilkBowl position={position} obstacleRef={obstacleRef} />
 
   if (type === 'pencils') {
@@ -544,7 +547,7 @@ function Obstacle({ type, position, obstacleRef, onMove }) {
   )
 }
 
-function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions }) {
+function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, cheeseRequests }) {
   const items = useMemo(
     () => Array.from({ length: 9 }, (_, i) => {
       const type = i % 2 ? OVERHEAD_TYPES[i % OVERHEAD_TYPES.length] : MOVING_TYPES[i % MOVING_TYPES.length]
@@ -558,7 +561,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions })
     return () => { obstaclesRef.current = [] }
   }, [items, obstaclesRef])
 
-  useFrame((state, delta) => {
+  useFrame((_, delta) => {
     if (!active) return
 
     items.forEach((item, index) => {
@@ -572,13 +575,20 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions })
         ) z -= MIN_OBJECT_GAP
         item.z = z
         item.x = LANES[Math.floor(Math.random() * LANES.length)]
-        item.type = Math.random() < 0.5
-          ? OVERHEAD_TYPES[Math.floor(Math.random() * OVERHEAD_TYPES.length)]
-          : MOVING_TYPES[Math.floor(Math.random() * MOVING_TYPES.length)]
+        const type = chooseSpawnType()
+        if (type === 'cheese') {
+          item.type = 'empty'
+          cheeseRequests.current += 1
+        } else if (type === 'milk') {
+          item.type = 'milkBowl'
+        } else {
+          item.type = Math.random() < 0.5
+            ? OVERHEAD_TYPES[Math.floor(Math.random() * OVERHEAD_TYPES.length)]
+            : MOVING_TYPES[Math.floor(Math.random() * MOVING_TYPES.length)]
+        }
       }
       const y = item.type === 'yarn' ? GROUND_Y + 0.5 : item.type === 'milkBowl' ? GROUND_Y + 0.1 : item.type === 'milk' ? GROUND_Y + 0.02 : GROUND_Y
-      mesh.position.set(item.x, y, item.z)
-      if (item.type === 'yarn') item.x = Math.sin(state.clock.elapsedTime * 3) * 2
+      if (mesh) mesh.position.set(item.x, y, item.z)
     })
   })
 
@@ -588,7 +598,6 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions })
       type={item.type}
       position={[item.x, GROUND_Y, item.z]}
       obstacleRef={(mesh) => (refs.current[index] = mesh)}
-      onMove={(x) => { item.x = x }}
     />
   ))
 }
@@ -659,7 +668,7 @@ function makeCoinLine(obstacles, positions, nextId, coinsSpawned, playerRef) {
   })
 }
 
-function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, onCoin }) {
+function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, cheeseRequests, onCoin }) {
   const [coins, setCoins] = useState([])
   const live = useRef([])
   const positions = positionsRef
@@ -680,12 +689,14 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, 
   useFrame((_, delta) => {
     if (!active) return
     timer.current -= delta
-    if (timer.current <= 0) {
-      const line = makeCoinLine(obstaclesRef.current, positions.current, nextId, coinsSpawned, playerRef)
-      line.forEach((coin) => positions.current.set(coin.id, { x: coin.x, z: coin.z }))
-      if (line.length) commit([...live.current, ...line])
-      timer.current = 1
-    }
+    if (timer.current > 0 || cheeseRequests.current === 0) return
+    const line = makeCoinLine(obstaclesRef.current, positions.current, nextId, coinsSpawned, playerRef)
+    if (!line.length) return
+    // oxlint-disable-next-line react/immutability
+    cheeseRequests.current -= 1
+    line.forEach((coin) => positions.current.set(coin.id, { x: coin.x, z: coin.z }))
+    commit([...live.current, ...line])
+    timer.current = 0.5
   })
 
   return coins.map((coin) => (
@@ -811,7 +822,7 @@ function Environment({ active, speedRef }) {
   )
 }
 
-function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseSpeed, maxSpeed, onScore, onCaught, onCoin }) {
+function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseSpeed, maxSpeed, invincibleTime, onScore, onCaught, onMilk, onCoin }) {
   const player = useRef()
   const cat = useRef()
   const obstacles = useRef([])
@@ -820,6 +831,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
   const currentSpeed = useRef(baseSpeed)
   const playerStats = useRef({ hits: 0, lastHitTime: 0, invincibleUntil: 0 })
   const coinPositions = useRef(new Map())
+  const cheeseRequests = useRef(2)
 
   useFrame((state, delta) => {
     if (isPaused || isCaught) return
@@ -841,9 +853,10 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       if (obstacle.type === 'milkBowl' && hitX && hitZ) {
         playerStats.current.invincibleUntil = state.clock.elapsedTime + 5
         obstacle.z = 2
+        onMilk()
         continue
       }
-      if (playerStats.current.invincibleUntil > state.clock.elapsedTime) continue
+      if (invincibleTime > 0 || playerStats.current.invincibleUntil > state.clock.elapsedTime) continue
       const hitJumpObject = ['milk', 'mousetrap'].includes(obstacle.type) && player.current.position.y < 0.5
       const hitOverhead = OVERHEAD_TYPES.includes(obstacle.type) && player.current.scale.y === 1
       const collision = hitX && hitZ && (hitJumpObject || hitOverhead || obstacle.type === 'yarn')
@@ -874,6 +887,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         speedRef={currentSpeed}
         playerRef={player}
         coinPositions={coinPositions}
+        cheeseRequests={cheeseRequests}
       />
       <CoinSpawner
         active={active && !isPaused && !isCaught}
@@ -881,6 +895,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         obstaclesRef={obstacles}
         playerRef={player}
         positionsRef={coinPositions}
+        cheeseRequests={cheeseRequests}
         onCoin={onCoin}
       />
     </>
@@ -978,7 +993,7 @@ function HighScore({ score, onBack }) {
   )
 }
 
-function UIOverlay({ score, coinCount, isPaused, gameOver, onRestart, onMenu, onResume }) {
+function UIOverlay({ score, coinCount, invincibleTime, isPaused, gameOver, onRestart, onMenu, onResume }) {
   return (
     <div className="font-cartoon pointer-events-none absolute inset-0">
       <div className="absolute left-5 top-5 border border-cyan-300/20 bg-slate-950/75 px-4 py-2 font-mono text-xs text-slate-400">
@@ -988,6 +1003,7 @@ function UIOverlay({ score, coinCount, isPaused, gameOver, onRestart, onMenu, on
         <span className="font-black text-cyan-200">SCORE {score.toString().padStart(4, '0')}</span>
         <span className="font-black text-yellow-300">CHEESE: {coinCount}</span>
       </div>
+      {invincibleTime > 0 && <div className="absolute top-24 left-1/2 -translate-x-1/2 bg-blue-500 border-4 border-black text-white font-black text-3xl px-6 py-2 rounded-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-bounce">MILK POWER: {invincibleTime}s</div>}
       {isPaused && !gameOver && (
         <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-slate-950/70 p-6">
           <div className="w-full max-w-sm border border-cyan-300/40 bg-slate-950 p-7 text-center text-white">
@@ -1016,6 +1032,7 @@ export default function App() {
   const [screen, setScreen] = useState('menu')
   const [score, setScore] = useState(0)
   const [coinCount, setCoinCount] = useState(0)
+  const [invincibleTime, setInvincibleTime] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
   const [isCaught, setIsCaught] = useState(false)
   const [theme, setTheme] = useState('day')
@@ -1042,6 +1059,7 @@ export default function App() {
     setIsCaught(false)
     setScore(0)
     setCoinCount(0)
+    setInvincibleTime(0)
     hits.current = 0
     setRun((value) => value + 1)
     setScreen('playing')
@@ -1071,6 +1089,12 @@ export default function App() {
 
   useEffect(() => () => clearTimeout(catchTimer.current), [])
 
+  useEffect(() => {
+    if (invincibleTime <= 0) return undefined
+    const timer = setInterval(() => setInvincibleTime((time) => Math.max(0, time - 1)), 1000)
+    return () => clearInterval(timer)
+  }, [invincibleTime])
+
   if (screen === 'menu') {
     return (
       <div className="relative min-h-screen w-full overflow-hidden bg-[#3b2117]">
@@ -1099,8 +1123,10 @@ export default function App() {
           theme={theme}
           baseSpeed={settings.baseSpeed}
           maxSpeed={settings.maxSpeed}
+          invincibleTime={invincibleTime}
           onScore={setScore}
           onCoin={(value) => setCoinCount((total) => total + value)}
+          onMilk={() => setInvincibleTime(5)}
           onCaught={caught}
         />
         <EffectComposer multisampling={0} enableNormalPass>
@@ -1110,6 +1136,7 @@ export default function App() {
       <UIOverlay
         score={score}
         coinCount={coinCount}
+        invincibleTime={invincibleTime}
         isPaused={isPaused}
         gameOver={screen === 'gameover'}
         onRestart={() => start(settings)}
