@@ -338,29 +338,7 @@ function Mouse({ playerRef, active, cinematic }) {
   )
 }
 
-function DustTrail({ playerRef, active }) {
-  const refs = useRef([])
-
-  useFrame((_, delta) => {
-    if (!active || !playerRef.current) return
-    const player = playerRef.current.position
-    refs.current.forEach((dust, index) => {
-      dust.position.z += delta * 4
-      if (dust.position.z > 3) {
-        dust.position.set(player.x + (index - 2) * 0.1, GROUND_Y + 0.05 + (index % 2) * 0.05, player.z)
-      }
-    })
-  })
-
-  return [0, 1, 2, 3].map((index) => (
-    <mesh key={index} ref={(dust) => (refs.current[index] = dust)} position={[0, GROUND_Y + 0.05, 0]}>
-      <sphereGeometry args={[0.05, 4, 4]} />
-      <meshBasicMaterial color="#fff7e6" />
-    </mesh>
-  ))
-}
-
-function Cat({ catRef, playerRef, active, isCaught }) {
+function Cat({ catRef, playerRef, playerStats, active, isCaught }) {
   const startTime = useRef(null)
 
   useFrame((state, delta) => {
@@ -374,6 +352,9 @@ function Cat({ catRef, playerRef, active, isCaught }) {
     if (isCaught) {
       cat.visible = true
       cat.position.lerp({ x: mouse.x, y: CAT_GROUND_Y, z: mouse.z }, Math.min(1, delta * 12))
+    } else if (playerStats.current.hits === 1) {
+      cat.visible = true
+      cat.position.set(mouse.x, CAT_GROUND_Y, mouse.z + 1.5)
     } else if (elapsed < 3) {
       cat.visible = true
       cat.position.set(mouse.x, CAT_GROUND_Y, mouse.z + 3)
@@ -433,7 +414,7 @@ function Obstacle({ type, position, obstacleRef }) {
   const materials = useMemo(() => ({
     book: '#3478c5',
     milk: '#fff7e6',
-    trap: '#d64545',
+    mousetrap: '#d64545',
     table: '#b7794b',
     pencil: '#ffd43b',
     ruler: '#8a542f',
@@ -484,12 +465,12 @@ function Obstacle({ type, position, obstacleRef }) {
     )
   }
 
-  if (type === 'trap') {
+  if (type === 'mousetrap') {
     return (
       <group ref={obstacleRef} position={position}>
         <mesh position={[0, 0.08, 0]} castShadow receiveShadow>
           <boxGeometry args={[1.4, 0.16, 1.2]} />
-          <meshStandardMaterial color={materials.trap} flatShading />
+          <meshStandardMaterial color={materials.mousetrap} flatShading />
         </mesh>
         <mesh position={[0, 0.22, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
           <cylinderGeometry args={[0.06, 0.06, 1.1, 8]} />
@@ -518,7 +499,7 @@ function Obstacle({ type, position, obstacleRef }) {
 function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
   const items = useMemo(
     () => Array.from({ length: 9 }, (_, i) => {
-      const type = i % 2 ? OVERHEAD_TYPES[i % OVERHEAD_TYPES.length] : ['milk', 'trap'][i % 2]
+      const type = i % 2 ? OVERHEAD_TYPES[i % OVERHEAD_TYPES.length] : ['milk', 'mousetrap'][i % 2]
       return { type, x: LANES[i % 3], z: -8 - i * 7 }
     }),
     [],
@@ -541,7 +522,7 @@ function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
         item.x = LANES[Math.floor(Math.random() * LANES.length)]
         item.type = Math.random() < 0.5
           ? OVERHEAD_TYPES[Math.floor(Math.random() * OVERHEAD_TYPES.length)]
-          : ['milk', 'trap'][Math.floor(Math.random() * 2)]
+          : ['milk', 'mousetrap'][Math.floor(Math.random() * 2)]
       }
       mesh.position.set(item.x, GROUND_Y, item.z)
     })
@@ -789,12 +770,11 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
   const score = useRef(0)
   const lastScore = useRef(0)
   const currentSpeed = useRef(baseSpeed)
-  const hitCooldown = useRef(0)
+  const playerStats = useRef({ hits: 0, lastHitTime: 0 })
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     if (isPaused || isCaught) return
     if (!active) return
-    hitCooldown.current = Math.max(0, hitCooldown.current - delta)
     currentSpeed.current = Math.min(currentSpeed.current + delta * 0.4, maxSpeed)
     score.current += delta * currentSpeed.current
     if (Math.floor(score.current) !== lastScore.current) {
@@ -807,14 +787,17 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       const pz = player.current.position.z
       const ox = obstacle.x
       const oz = obstacle.z
-      const hitXZ = Math.abs(px - ox) < 0.6 && Math.abs(pz - oz) < 0.6
-      const hitJumpObject = ['milk', 'trap'].includes(obstacle.type) && hitXZ && player.current.position.y < 0.5
-      const hitOverhead = OVERHEAD_TYPES.includes(obstacle.type) && hitXZ && player.current.scale.y === 1
+      const hitX = Math.abs(px - ox) < 0.4
+      const hitZ = Math.abs(pz - oz) < 0.4
+      const hitJumpObject = ['milk', 'mousetrap'].includes(obstacle.type) && player.current.position.y < 0.5
+      const hitOverhead = OVERHEAD_TYPES.includes(obstacle.type) && player.current.scale.y === 1
+      const collision = hitX && hitZ && (hitJumpObject || hitOverhead)
 
-      if (hitCooldown.current === 0 && (hitJumpObject || hitOverhead)) {
-        hitCooldown.current = 1.5
+      if (collision && state.clock.elapsedTime - playerStats.current.lastHitTime > 1.5) {
+        playerStats.current.lastHitTime = state.clock.elapsedTime
         obstacle.z = 2
-        onCaught(score.current)
+        if (obstacle.type !== 'mousetrap') playerStats.current.hits += 1
+        onCaught(score.current, obstacle.type === 'mousetrap')
         break
       }
     }
@@ -829,8 +812,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       <Environment active={active && !isPaused && !isCaught} speedRef={currentSpeed} />
       {cinematic && <MenuDecor />}
       <Mouse playerRef={player} active={active && !isPaused && !isCaught} cinematic={cinematic} />
-      {active && !isPaused && !isCaught && <DustTrail playerRef={player} active />}
-      <Cat catRef={cat} playerRef={player} active={active && !isPaused} isCaught={isCaught} />
+      <Cat catRef={cat} playerRef={player} playerStats={playerStats} active={active && !isPaused} isCaught={isCaught} />
       <Obstacles
         active={active && !isPaused}
         baseSpeed={baseSpeed}
@@ -1018,13 +1000,13 @@ export default function App() {
     setScreen('gameover')
   }
 
-  const caught = (finalScore) => {
+  const caught = (finalScore, instant = false) => {
     if (isCaught) return
     hits.current += 1
     setIsCaught(true)
     clearTimeout(catchTimer.current)
-    if (hits.current >= 2) {
-      catchTimer.current = setTimeout(() => gameOver(finalScore), 1500)
+    if (instant || hits.current >= 2) {
+      catchTimer.current = setTimeout(() => gameOver(finalScore), instant ? 500 : 1500)
     } else {
       catchTimer.current = setTimeout(() => setIsCaught(false), 1000)
     }
