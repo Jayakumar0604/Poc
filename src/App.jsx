@@ -338,6 +338,28 @@ function Mouse({ playerRef, active, cinematic }) {
   )
 }
 
+function DustTrail({ playerRef, active }) {
+  const refs = useRef([])
+
+  useFrame((_, delta) => {
+    if (!active || !playerRef.current) return
+    const player = playerRef.current.position
+    refs.current.forEach((dust, index) => {
+      dust.position.z += delta * 4
+      if (dust.position.z > 3) {
+        dust.position.set(player.x + (index - 2) * 0.1, GROUND_Y + 0.05 + (index % 2) * 0.05, player.z)
+      }
+    })
+  })
+
+  return [0, 1, 2, 3].map((index) => (
+    <mesh key={index} ref={(dust) => (refs.current[index] = dust)} position={[0, GROUND_Y + 0.05, 0]}>
+      <sphereGeometry args={[0.05, 4, 4]} />
+      <meshBasicMaterial color="#fff7e6" />
+    </mesh>
+  ))
+}
+
 function Cat({ catRef, playerRef, active, isCaught }) {
   const startTime = useRef(null)
 
@@ -426,7 +448,7 @@ function Obstacle({ type, position, obstacleRef }) {
             <meshStandardMaterial color={materials.pencil} flatShading />
           </mesh>
         ))}
-        <mesh position={[0, 1.5, 0]} castShadow receiveShadow>
+        <mesh position={[0, 1.525, 0]} castShadow receiveShadow>
           <boxGeometry args={[2.5, 0.05, 0.4]} />
           <meshStandardMaterial color={materials.ruler} flatShading />
         </mesh>
@@ -437,8 +459,16 @@ function Obstacle({ type, position, obstacleRef }) {
   if (type === 'book') {
     return (
       <group ref={obstacleRef} position={position}>
-        <mesh position={[0, 1.2, 0]} rotation={[0, 0, Math.PI / 12]} castShadow receiveShadow>
-          <boxGeometry args={[2.5, 0.2, 1.5]} />
+        <mesh position={[-1.2, 0.6, 0]} castShadow receiveShadow>
+          <boxGeometry args={[0.2, 1.2, 1]} />
+          <meshStandardMaterial color={materials.book} flatShading />
+        </mesh>
+        <mesh position={[1.2, 0.6, 0]} castShadow receiveShadow>
+          <boxGeometry args={[0.2, 1.2, 1]} />
+          <meshStandardMaterial color="#d64545" flatShading />
+        </mesh>
+        <mesh position={[0, 1.3, 0]} castShadow receiveShadow>
+          <boxGeometry args={[3, 0.2, 1.5]} />
           <meshStandardMaterial color={materials.book} flatShading />
         </mesh>
       </group>
@@ -738,6 +768,10 @@ function Environment({ active, speedRef }) {
           flatShading
         />
       </mesh>
+      <mesh position={[0, GROUND_Y + 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[4, 1000]} />
+        <meshStandardMaterial color="#b31b1b" roughness={0.9} />
+      </mesh>
       {planks.map((plank, index) => (
         <mesh key={index} ref={(mesh) => (refs.current[index] = mesh)} position={[0, -0.53, plank.z]} castShadow receiveShadow>
           <boxGeometry args={[7.8, 0.02, 0.06]} />
@@ -795,6 +829,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       <Environment active={active && !isPaused && !isCaught} speedRef={currentSpeed} />
       {cinematic && <MenuDecor />}
       <Mouse playerRef={player} active={active && !isPaused && !isCaught} cinematic={cinematic} />
+      {active && !isPaused && !isCaught && <DustTrail playerRef={player} active />}
       <Cat catRef={cat} playerRef={player} active={active && !isPaused} isCaught={isCaught} />
       <Obstacles
         active={active && !isPaused}
