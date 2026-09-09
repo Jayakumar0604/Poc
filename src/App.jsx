@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { EffectComposer, SSAO } from '@react-three/postprocessing'
-import { CanvasTexture, RepeatWrapping } from 'three'
+import { CanvasTexture, MathUtils, RepeatWrapping } from 'three'
 
 const KEY = 'endless-runner-high-score'
 const LANES = [-2.4, 0, 2.4]
@@ -10,14 +10,17 @@ const MOUSE_GROUND_Y = GROUND_Y + 0.2
 const CAT_GROUND_Y = GROUND_Y + 0.55
 const CHEESE_GROUND_Y = GROUND_Y + 0.3
 const OVERHEAD_TYPES = ['table', 'pencils', 'book']
+const MOVING_TYPES = ['milk', 'mousetrap', 'yarn', 'milkBowl']
+const MIN_OBJECT_GAP = 10
 const DIFFICULTIES = {
   Easy: { baseSpeed: 3, maxSpeed: 12 },
   Medium: { baseSpeed: 6, maxSpeed: 18 },
   Hard: { baseSpeed: 9, maxSpeed: 26 },
 }
 const readBest = () => Number(localStorage.getItem(KEY)) || 0
-const coinFits = (x, z, obstacles) => obstacles.every(
-  (obstacle) => Math.abs(obstacle.x - x) >= 1 || Math.abs(obstacle.z - z) >= 1,
+const coinFits = (z, obstacles, positions) => (
+  obstacles.every((obstacle) => Math.abs(obstacle.z - z) >= MIN_OBJECT_GAP) &&
+  [...positions.values()].every((other) => Math.abs(other.z - z) >= MIN_OBJECT_GAP)
 )
 
 function Camera({ isCaught, cinematic }) {
@@ -166,6 +169,18 @@ function SideScenery({ active, speedRef, theme }) {
         <boxGeometry args={[1, 4, 100]} />
         <meshStandardMaterial color="#d2e6d4" roughness={0.9} flatShading />
       </mesh>
+      {[-1, 1].flatMap((side) => [-18, -48].map((z, index) => (
+        <mesh key={`painting-${side}-${index}`} position={[side * 3.95, 2.5, z]} castShadow>
+          <boxGeometry args={[0.1, 1.5, 1.5]} />
+          <meshStandardMaterial color={index ? '#4f86c6' : '#e7b98c'} flatShading />
+        </mesh>
+      )))}
+      {[-1, 1].flatMap((side) => [-30, -70].map((z, index) => (
+        <mesh key={`hole-${side}-${index}`} position={[side * 3.95, GROUND_Y + 0.4, z]}>
+          <boxGeometry args={[0.1, 0.6, 0.6]} />
+          <meshBasicMaterial color="#050505" />
+        </mesh>
+      )))}
       {lights.map((light, index) => (
         <group key={`lamp-${index}`} ref={(node) => (lampRefs.current[index] = node)} position={[light.x, GROUND_Y, light.z]}>
           <TableLamp theme={theme} />
@@ -244,7 +259,7 @@ function Mouse({ playerRef, active, cinematic }) {
     if (!player) return
     player.scale.set(1, value ? 0.5 : 1, 1)
     player.position.y = value ? GROUND_Y + 0.1 : MOUSE_GROUND_Y
-  }, [playerRef])
+  }, [])
 
   useEffect(() => {
     const move = (event) => {
@@ -349,17 +364,21 @@ function Cat({ catRef, playerRef, playerStats, active, isCaught }) {
     const elapsed = state.clock.elapsedTime - startTime.current
     const cat = catRef.current
 
+    if (playerStats.current.hits === 1 && state.clock.elapsedTime - playerStats.current.lastHitTime > 8) {
+      // oxlint-disable-next-line react/immutability
+      playerStats.current.hits = 0
+    }
+
     if (isCaught) {
       cat.visible = true
       cat.position.lerp({ x: mouse.x, y: CAT_GROUND_Y, z: mouse.z }, Math.min(1, delta * 12))
-    } else if (playerStats.current.hits === 1) {
-      cat.visible = true
-      cat.position.set(mouse.x, CAT_GROUND_Y, mouse.z + 1.5)
-    } else if (elapsed < 3) {
-      cat.visible = true
-      cat.position.set(mouse.x, CAT_GROUND_Y, mouse.z + 3)
     } else {
-      cat.visible = false
+      const chase = playerStats.current.hits === 1
+      const visible = chase || elapsed < 3
+      const targetZ = chase ? mouse.z + 1.5 : visible ? mouse.z + 3 : mouse.z + 15
+      cat.visible = visible
+      cat.position.x = MathUtils.lerp(cat.position.x, mouse.x, 0.05)
+      cat.position.z = MathUtils.lerp(cat.position.z, targetZ, 0.05)
     }
 
     cat.rotation.z = Math.sin(state.clock.elapsedTime * 20) * 0.15
@@ -410,7 +429,33 @@ function Cat({ catRef, playerRef, playerStats, active, isCaught }) {
   )
 }
 
-function Obstacle({ type, position, obstacleRef }) {
+function Yarn({ position, obstacleRef, onMove }) {
+  const ref = useRef()
+  useFrame((state) => {
+    if (!ref.current) return
+    const x = Math.sin(state.clock.elapsedTime * 3) * 2
+    ref.current.position.x = x
+    onMove(x)
+  })
+
+  return (
+    <mesh ref={(node) => { ref.current = node; obstacleRef(node) }} position={[position[0], position[1] + 0.5, position[2]]} castShadow receiveShadow>
+      <sphereGeometry args={[0.5, 8, 6]} />
+      <meshStandardMaterial color="#d64545" flatShading />
+    </mesh>
+  )
+}
+
+function MilkBowl({ position, obstacleRef }) {
+  return (
+    <mesh ref={obstacleRef} position={[position[0], position[1] + 0.1, position[2]]} castShadow receiveShadow>
+      <cylinderGeometry args={[0.3, 0.2, 0.2, 8]} />
+      <meshStandardMaterial color="#ffffff" flatShading />
+    </mesh>
+  )
+}
+
+function Obstacle({ type, position, obstacleRef, onMove }) {
   const materials = useMemo(() => ({
     book: '#3478c5',
     milk: '#fff7e6',
@@ -419,6 +464,9 @@ function Obstacle({ type, position, obstacleRef }) {
     pencil: '#ffd43b',
     ruler: '#8a542f',
   }), [])
+
+  if (type === 'yarn') return <Yarn position={position} obstacleRef={obstacleRef} onMove={onMove} />
+  if (type === 'milkBowl') return <MilkBowl position={position} obstacleRef={obstacleRef} />
 
   if (type === 'pencils') {
     return (
@@ -496,11 +544,11 @@ function Obstacle({ type, position, obstacleRef }) {
   )
 }
 
-function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
+function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions }) {
   const items = useMemo(
     () => Array.from({ length: 9 }, (_, i) => {
-      const type = i % 2 ? OVERHEAD_TYPES[i % OVERHEAD_TYPES.length] : ['milk', 'mousetrap'][i % 2]
-      return { type, x: LANES[i % 3], z: -8 - i * 7 }
+      const type = i % 2 ? OVERHEAD_TYPES[i % OVERHEAD_TYPES.length] : MOVING_TYPES[i % MOVING_TYPES.length]
+      return { type, x: LANES[i % 3], z: -12 - i * 12 }
     }),
     [],
   )
@@ -510,21 +558,27 @@ function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
     return () => { obstaclesRef.current = [] }
   }, [items, obstaclesRef])
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     if (!active) return
 
     items.forEach((item, index) => {
       const mesh = refs.current[index]
       item.z += delta * speedRef.current
       if (item.z > 5) {
-        const spawnDistance = Math.max(38, 72 - (speedRef.current - baseSpeed) * 2)
-        item.z = -(spawnDistance + Math.random() * 16)
+        let z = playerRef.current.position.z - 80
+        while (
+          items.some((other) => other !== item && Math.abs(other.z - z) < MIN_OBJECT_GAP) ||
+          [...coinPositions.current.values()].some((coin) => Math.abs(coin.z - z) < MIN_OBJECT_GAP)
+        ) z -= MIN_OBJECT_GAP
+        item.z = z
         item.x = LANES[Math.floor(Math.random() * LANES.length)]
         item.type = Math.random() < 0.5
           ? OVERHEAD_TYPES[Math.floor(Math.random() * OVERHEAD_TYPES.length)]
-          : ['milk', 'mousetrap'][Math.floor(Math.random() * 2)]
+          : MOVING_TYPES[Math.floor(Math.random() * MOVING_TYPES.length)]
       }
-      mesh.position.set(item.x, GROUND_Y, item.z)
+      const y = item.type === 'yarn' ? GROUND_Y + 0.5 : item.type === 'milkBowl' ? GROUND_Y + 0.1 : item.type === 'milk' ? GROUND_Y + 0.02 : GROUND_Y
+      mesh.position.set(item.x, y, item.z)
+      if (item.type === 'yarn') item.x = Math.sin(state.clock.elapsedTime * 3) * 2
     })
   })
 
@@ -534,6 +588,7 @@ function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
       type={item.type}
       position={[item.x, GROUND_Y, item.z]}
       obstacleRef={(mesh) => (refs.current[index] = mesh)}
+      onMove={(x) => { item.x = x }}
     />
   ))
 }
@@ -585,19 +640,12 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, onCollect, on
   )
 }
 
-function makeCoinLine(obstacles, positions, nextId, coinsSpawned) {
-  const count = 3 + Math.floor(Math.random() * 3)
-  const startZ = -(55 + Math.random() * 20)
-  const zValues = Array.from({ length: count }, (_, i) => startZ - i * 3.5)
-  const lane = [...LANES].sort(() => Math.random() - 0.5).find((x) =>
-    zValues.every((z) =>
-      coinFits(x, z, obstacles) &&
-      [...positions.values()].every(
-        (other) => Math.abs(other.x - x) >= 1 || Math.abs(other.z - z) >= 1,
-      ),
-    ),
-  )
-  if (lane === undefined) return []
+function makeCoinLine(obstacles, positions, nextId, coinsSpawned, playerRef) {
+  const count = 3 + Math.floor(Math.random() * 2)
+  const startZ = playerRef.current.position.z - 80 - Math.random() * 20
+  const zValues = Array.from({ length: count }, (_, i) => startZ - i * MIN_OBJECT_GAP)
+  if (!zValues.every((z) => coinFits(z, obstacles, positions))) return []
+  const lane = LANES[Math.floor(Math.random() * LANES.length)]
   return zValues.map((z) => {
     const superCoin = coinsSpawned.current++ % 11 === 10
     return {
@@ -611,10 +659,10 @@ function makeCoinLine(obstacles, positions, nextId, coinsSpawned) {
   })
 }
 
-function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, onCoin }) {
+function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, onCoin }) {
   const [coins, setCoins] = useState([])
   const live = useRef([])
-  const positions = useRef(new Map())
+  const positions = positionsRef
   const timer = useRef(0)
   const nextId = useRef(0)
   const coinsSpawned = useRef(0)
@@ -633,10 +681,10 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, onCoin }) {
     if (!active) return
     timer.current -= delta
     if (timer.current <= 0) {
-      const line = makeCoinLine(obstaclesRef.current, positions.current, nextId, coinsSpawned)
+      const line = makeCoinLine(obstaclesRef.current, positions.current, nextId, coinsSpawned, playerRef)
       line.forEach((coin) => positions.current.set(coin.id, { x: coin.x, z: coin.z }))
       if (line.length) commit([...live.current, ...line])
-      timer.current = 1.5
+      timer.current = 1
     }
   })
 
@@ -770,7 +818,8 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
   const score = useRef(0)
   const lastScore = useRef(0)
   const currentSpeed = useRef(baseSpeed)
-  const playerStats = useRef({ hits: 0, lastHitTime: 0 })
+  const playerStats = useRef({ hits: 0, lastHitTime: 0, invincibleUntil: 0 })
+  const coinPositions = useRef(new Map())
 
   useFrame((state, delta) => {
     if (isPaused || isCaught) return
@@ -789,9 +838,15 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       const oz = obstacle.z
       const hitX = Math.abs(px - ox) < 0.4
       const hitZ = Math.abs(pz - oz) < 0.4
+      if (obstacle.type === 'milkBowl' && hitX && hitZ) {
+        playerStats.current.invincibleUntil = state.clock.elapsedTime + 5
+        obstacle.z = 2
+        continue
+      }
+      if (playerStats.current.invincibleUntil > state.clock.elapsedTime) continue
       const hitJumpObject = ['milk', 'mousetrap'].includes(obstacle.type) && player.current.position.y < 0.5
       const hitOverhead = OVERHEAD_TYPES.includes(obstacle.type) && player.current.scale.y === 1
-      const collision = hitX && hitZ && (hitJumpObject || hitOverhead)
+      const collision = hitX && hitZ && (hitJumpObject || hitOverhead || obstacle.type === 'yarn')
 
       if (collision && state.clock.elapsedTime - playerStats.current.lastHitTime > 1.5) {
         playerStats.current.lastHitTime = state.clock.elapsedTime
@@ -815,15 +870,17 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       <Cat catRef={cat} playerRef={player} playerStats={playerStats} active={active && !isPaused} isCaught={isCaught} />
       <Obstacles
         active={active && !isPaused}
-        baseSpeed={baseSpeed}
         obstaclesRef={obstacles}
         speedRef={currentSpeed}
+        playerRef={player}
+        coinPositions={coinPositions}
       />
       <CoinSpawner
         active={active && !isPaused && !isCaught}
         speedRef={currentSpeed}
         obstaclesRef={obstacles}
         playerRef={player}
+        positionsRef={coinPositions}
         onCoin={onCoin}
       />
     </>
