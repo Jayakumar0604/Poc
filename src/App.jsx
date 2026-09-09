@@ -5,6 +5,9 @@ import { CanvasTexture, DoubleSide, RepeatWrapping } from 'three'
 
 const KEY = 'endless-runner-high-score'
 const LANES = [-2.4, 0, 2.4]
+const GROUND_Y = -0.57
+const MOUSE_GROUND_Y = GROUND_Y + 0.2
+const CAT_GROUND_Y = GROUND_Y + 0.55
 const DIFFICULTIES = {
   Easy: { baseSpeed: 3, maxSpeed: 12 },
   Medium: { baseSpeed: 6, maxSpeed: 18 },
@@ -146,12 +149,12 @@ function SideScenery({ active, speedRef, theme }) {
   return (
     <>
       {lights.map((light, index) => (
-        <group key={`lamp-${index}`} ref={(node) => (lampRefs.current[index] = node)} position={[light.x, 0, light.z]}>
+        <group key={`lamp-${index}`} ref={(node) => (lampRefs.current[index] = node)} position={[light.x, GROUND_Y, light.z]}>
           <TableLamp theme={theme} />
         </group>
       ))}
       {trees.map((tree, index) => (
-        <group key={`tree-${index}`} ref={(node) => (treeRefs.current[index] = node)} position={[tree.x, 0, tree.z]}>
+        <group key={`tree-${index}`} ref={(node) => (treeRefs.current[index] = node)} position={[tree.x, GROUND_Y, tree.z]}>
           <LowPolyTree />
         </group>
       ))}
@@ -160,7 +163,7 @@ function SideScenery({ active, speedRef, theme }) {
 }
 
 function MenuDecor() {
-  const cheeseBlocks = [[-2.5, 0.65, -7], [2.6, 0.7, -12], [0.8, 0.7, -20]]
+  const cheeseBlocks = [[-2.5, GROUND_Y + 0.7, -7], [2.6, GROUND_Y + 0.7, -12], [0.8, GROUND_Y + 0.7, -20]]
   const trees = [[-5.5, -19], [5.5, -24], [-6, -38], [6, -42]]
 
   return (
@@ -182,7 +185,7 @@ function MenuDecor() {
         </group>
       ))}
       {trees.map(([x, z], index) => (
-        <group key={`tree-${index}`} position={[x, 0, z]}>
+        <group key={`tree-${index}`} position={[x, GROUND_Y, z]}>
           <mesh position={[0, 1.3, 0]} castShadow>
             <cylinderGeometry args={[0.18, 0.24, 2.6, 8]} />
             <meshStandardMaterial color="#8b5a2b" flatShading />
@@ -193,7 +196,7 @@ function MenuDecor() {
           </mesh>
         </group>
       ))}
-      <group position={[-4.7, 0, -8]} rotation={[0, 0.1, 0]}>
+      <group position={[-4.7, GROUND_Y, -8]} rotation={[0, 0.1, 0]}>
         <mesh position={[0, 1.4, 0]} castShadow>
           <cylinderGeometry args={[0.12, 0.16, 2.8, 6]} />
           <meshStandardMaterial color="#6b4226" flatShading />
@@ -217,7 +220,7 @@ function Mouse({ playerRef, active, cinematic }) {
     const player = playerRef.current
     if (!player) return
     player.scale.set(1, value ? 0.5 : 1, 1)
-    player.position.y = value ? -0.1 : 0
+    player.position.y = value ? GROUND_Y + 0.1 : MOUSE_GROUND_Y
   }, [playerRef])
 
   useEffect(() => {
@@ -233,7 +236,7 @@ function Mouse({ playerRef, active, cinematic }) {
         ducking.current = false
         grounded.current = false
         velocity.current = 12
-        playerRef.current.position.y = 0
+        playerRef.current.position.y = MOUSE_GROUND_Y
         setDuck(false)
       }
       if (duck && grounded.current) {
@@ -265,8 +268,8 @@ function Mouse({ playerRef, active, cinematic }) {
     if (!grounded.current) {
       velocity.current -= 30 * delta
       player.position.y += velocity.current * delta
-      if (player.position.y <= 0) {
-        player.position.y = 0
+      if (player.position.y <= MOUSE_GROUND_Y) {
+        player.position.y = MOUSE_GROUND_Y
         velocity.current = 0
         grounded.current = true
       }
@@ -275,7 +278,7 @@ function Mouse({ playerRef, active, cinematic }) {
   })
 
   return (
-    <group ref={playerRef} position={cinematic ? [-2.4, 0, 1.5] : [0, 0, 0]} scale={[1, 1, 1]}>
+    <group ref={playerRef} position={cinematic ? [-2.4, MOUSE_GROUND_Y, 1.5] : [0, MOUSE_GROUND_Y, 0]} scale={[1, 1, 1]}>
       <mesh scale={[1, 1, 1.5]} castShadow receiveShadow>
         <sphereGeometry args={[0.2, 16, 16]} />
         <meshStandardMaterial color="#777" flatShading />
@@ -321,17 +324,17 @@ function Cat({ catRef, playerRef, active, isCaught }) {
 
     if (isCaught) {
       cat.visible = true
-      cat.position.lerp(mouse, Math.min(1, delta * 12))
+      cat.position.lerp({ x: mouse.x, y: CAT_GROUND_Y, z: mouse.z }, Math.min(1, delta * 12))
     } else if (elapsed < 3) {
       cat.visible = true
-      cat.position.set(mouse.x, 0, mouse.z + 3)
+      cat.position.set(mouse.x, CAT_GROUND_Y, mouse.z + 3)
     } else {
       cat.visible = false
     }
   })
 
   return (
-    <group ref={catRef} position={[0, 0, 3]} visible={active || isCaught}>
+    <group ref={catRef} position={[0, CAT_GROUND_Y, 3]} visible={active || isCaught}>
       <mesh position={[0, 0, 0.15]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
         <cylinderGeometry args={[0.3, 0.35, 1.2, 6]} />
         <meshStandardMaterial color="#171923" flatShading />
@@ -376,7 +379,7 @@ function Obstacle({ type, position, obstacleRef }) {
 
   if (type === 'book') {
     return (
-      <mesh ref={obstacleRef} position={[position[0], 0.12, position[2]]} rotation={[0, 0.2, 0]} castShadow receiveShadow>
+      <mesh ref={obstacleRef} position={[position[0], position[1] + 0.12, position[2]]} rotation={[0, 0.2, 0]} castShadow receiveShadow>
         <boxGeometry args={[1.4, 0.24, 1.1]} />
         <meshStandardMaterial color={materials.book} flatShading />
       </mesh>
@@ -385,7 +388,7 @@ function Obstacle({ type, position, obstacleRef }) {
 
   if (type === 'milk') {
     return (
-      <mesh ref={obstacleRef} position={[position[0], 0.02, position[2]]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <mesh ref={obstacleRef} position={[position[0], position[1] + 0.02, position[2]]} rotation={[-Math.PI / 2, 0, 0]} castShadow receiveShadow>
         <planeGeometry args={[1.5, 1.2]} />
         <meshStandardMaterial color={materials.milk} flatShading />
       </mesh>
@@ -449,7 +452,7 @@ function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
         item.x = LANES[Math.floor(Math.random() * LANES.length)]
         item.type = Math.random() < 0.5 ? 'table' : ['book', 'milk', 'trap'][Math.floor(Math.random() * 3)]
       }
-      mesh.position.set(item.x, 0, item.z)
+      mesh.position.set(item.x, GROUND_Y, item.z)
     })
   })
 
@@ -457,7 +460,7 @@ function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
     <Obstacle
       key={index}
       type={item.type}
-      position={[item.x, 0, item.z]}
+      position={[item.x, GROUND_Y, item.z]}
       obstacleRef={(mesh) => (refs.current[index] = mesh)}
     />
   ))
@@ -583,7 +586,7 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, onCoin }) {
 function KitchenProps() {
   return (
     <>
-      <group position={[-6.2, 2, -28]}>
+      <group position={[-6.2, GROUND_Y + 2, -28]}>
         <mesh castShadow receiveShadow>
           <boxGeometry args={[2.4, 4, 2.6]} />
           <meshStandardMaterial color="#b8dfd8" flatShading />
@@ -597,7 +600,7 @@ function KitchenProps() {
           <meshStandardMaterial color="#b7794b" flatShading />
         </mesh>
       </group>
-      <group position={[6.2, 1.7, -45]}>
+      <group position={[6.2, GROUND_Y + 1.7, -45]}>
         <mesh castShadow receiveShadow>
           <boxGeometry args={[3.2, 3.4, 2.8]} />
           <meshStandardMaterial color="#e7b98c" flatShading />
@@ -611,7 +614,7 @@ function KitchenProps() {
           <meshStandardMaterial color="#ffca28" flatShading />
         </mesh>
       </group>
-      <group position={[-6.4, 1.4, -60]}>
+      <group position={[-6.4, GROUND_Y + 1.4, -60]}>
         <mesh castShadow receiveShadow>
           <boxGeometry args={[3.2, 2.8, 2.2]} />
           <meshStandardMaterial color="#f2c6a0" flatShading />
@@ -672,7 +675,7 @@ function Environment({ active, speedRef }) {
         <meshStandardMaterial color="#d8eee1" side={DoubleSide} flatShading />
       </mesh>
       <KitchenProps />
-      <mesh position={[0, -0.57, -35]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <mesh position={[0, GROUND_Y, -35]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow={true}>
         <planeGeometry args={[8, 82]} />
         <meshStandardMaterial
           color="#b97850"
