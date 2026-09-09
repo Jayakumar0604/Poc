@@ -348,13 +348,17 @@ function Cat({ catRef, playerRef, active, isCaught }) {
 
   return (
     <group ref={catRef} position={[0, CAT_GROUND_Y, 3]} visible={active || isCaught}>
-      <mesh position={[0, 0, 0.15]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.3, 0.35, 1.2, 6]} />
+      <mesh position={[0, 0.12, 0.15]} scale={[0.75, 0.7, 1.15]} castShadow receiveShadow>
+        <sphereGeometry args={[0.45, 6, 4]} />
         <meshStandardMaterial color="#171923" flatShading />
       </mesh>
       <mesh position={[0, 0.42, -0.5]} castShadow receiveShadow>
-        <boxGeometry args={[0.35, 0.35, 0.35]} />
+        <sphereGeometry args={[0.35, 6, 4]} />
         <meshStandardMaterial color="#252936" flatShading />
+      </mesh>
+      <mesh position={[0, 0.34, -0.8]} castShadow>
+        <sphereGeometry args={[0.12, 6, 4]} />
+        <meshStandardMaterial color="#b8a9a0" flatShading />
       </mesh>
       <mesh position={[-0.1, 0.65, -0.5]} castShadow>
         <coneGeometry args={[0.1, 0.25, 4]} />
@@ -364,13 +368,17 @@ function Cat({ catRef, playerRef, active, isCaught }) {
         <coneGeometry args={[0.1, 0.25, 4]} />
         <meshStandardMaterial color="#252936" flatShading />
       </mesh>
-      <mesh position={[-0.1, 0.47, -0.69]} rotation={[0, 0, -0.2]} castShadow>
+      <mesh position={[-0.1, 0.47, -0.83]} rotation={[0, 0, -0.2]} castShadow>
         <boxGeometry args={[0.08, 0.05, 0.05]} />
         <meshStandardMaterial color="#aaff00" emissive="#aaff00" emissiveIntensity={2} flatShading />
       </mesh>
-      <mesh position={[0.1, 0.47, -0.69]} rotation={[0, 0, 0.2]} castShadow>
+      <mesh position={[0.1, 0.47, -0.83]} rotation={[0, 0, 0.2]} castShadow>
         <boxGeometry args={[0.08, 0.05, 0.05]} />
         <meshStandardMaterial color="#aaff00" emissive="#aaff00" emissiveIntensity={2} flatShading />
+      </mesh>
+      <mesh position={[0, 0.18, 0.82]} rotation={[Math.PI / 2, 0, 0.15]} castShadow>
+        <cylinderGeometry args={[0.06, 0.1, 0.9, 5]} />
+        <meshStandardMaterial color="#171923" flatShading />
       </mesh>
       {[-0.22, 0.22].flatMap((x) => [-0.15, 0.45].map((z) => (
         <mesh key={`${x}-${z}`} position={[x, -0.38, z]} castShadow receiveShadow>
