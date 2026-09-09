@@ -90,12 +90,12 @@ function SkyEnvironment({ active, speedRef, theme }) {
     <>
       {clouds.map(([x, z], index) => (
         <group key={index} ref={(cloud) => (refs.current[index] = cloud)} position={[x, 15, z]}>
-          <mesh><sphereGeometry args={[1.5, 8, 8]} /><meshBasicMaterial color="#ffffff" /></mesh>
-          <mesh position={[1.2, 0, 0]}><sphereGeometry args={[1, 8, 8]} /><meshBasicMaterial color="#ffffff" /></mesh>
+          <mesh><sphereGeometry args={[1.5, 6, 5]} /><meshBasicMaterial color="#ffffff" /></mesh>
+          <mesh position={[1.2, 0, 0]}><sphereGeometry args={[1, 6, 5]} /><meshBasicMaterial color="#ffffff" /></mesh>
         </group>
       ))}
       <mesh position={theme === 'day' ? [8, 12, -55] : [-8, 10, -55]}>
-        <sphereGeometry args={[theme === 'day' ? 2 : 1.2, 16, 16]} />
+        <sphereGeometry args={[theme === 'day' ? 2 : 1.2, 8, 6]} />
         <meshBasicMaterial color={theme === 'day' ? '#fff4a3' : '#ffffff'} />
       </mesh>
     </>
@@ -175,11 +175,11 @@ function MenuDecor() {
             <meshStandardMaterial color="#ffca28" flatShading />
           </mesh>
           <mesh position={[-0.35, 0.3, -0.72]}>
-            <sphereGeometry args={[0.14, 8, 8]} />
+            <sphereGeometry args={[0.14, 6, 5]} />
             <meshStandardMaterial color="#d88b18" flatShading />
           </mesh>
           <mesh position={[0.25, -0.25, -0.72]}>
-            <sphereGeometry args={[0.1, 8, 8]} />
+            <sphereGeometry args={[0.1, 6, 5]} />
             <meshStandardMaterial color="#d88b18" flatShading />
           </mesh>
         </group>
@@ -191,7 +191,7 @@ function MenuDecor() {
             <meshStandardMaterial color="#8b5a2b" flatShading />
           </mesh>
           <mesh position={[0, 2.8, 0]} castShadow>
-            <sphereGeometry args={[1.1, 8, 6]} />
+            <sphereGeometry args={[1.1, 6, 5]} />
             <meshStandardMaterial color="#65a854" flatShading />
           </mesh>
         </group>
@@ -289,15 +289,15 @@ function Mouse({ playerRef, active, cinematic }) {
   return (
     <group ref={attachMouse} position={cinematic ? [-2.4, MOUSE_GROUND_Y, 1.5] : [0, MOUSE_GROUND_Y, 0]} scale={[1, 1, 1]}>
       <mesh scale={[1, 1, 1.5]} castShadow receiveShadow>
-        <sphereGeometry args={[0.2, 16, 16]} />
+        <sphereGeometry args={[0.2, 8, 6]} />
         <meshStandardMaterial color="#777" flatShading />
       </mesh>
       <mesh position={[-0.12, 0.16, -0.08]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.1, 0.1, 0.02, 16]} />
+        <cylinderGeometry args={[0.1, 0.1, 0.02, 8]} />
         <meshStandardMaterial color="#ff9bb5" flatShading />
       </mesh>
       <mesh position={[0.12, 0.16, -0.08]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.1, 0.1, 0.02, 16]} />
+        <cylinderGeometry args={[0.1, 0.1, 0.02, 8]} />
         <meshStandardMaterial color="#ff9bb5" flatShading />
       </mesh>
       <mesh position={[-0.08, 0.08, -0.27]} castShadow>
@@ -684,11 +684,27 @@ function Environment({ active, speedRef }) {
     <>
       <mesh position={[-5, 2, -35]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
         <planeGeometry args={[82, 5]} />
-        <meshStandardMaterial color="#f3dfb3" side={DoubleSide} flatShading />
+        <meshStandardMaterial color="#f7dfb5" side={DoubleSide} roughness={0.9} flatShading />
       </mesh>
       <mesh position={[5, 2, -35]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
         <planeGeometry args={[82, 5]} />
-        <meshStandardMaterial color="#d8eee1" side={DoubleSide} flatShading />
+        <meshStandardMaterial color="#c9e4cf" side={DoubleSide} roughness={0.9} flatShading />
+      </mesh>
+      <mesh position={[-4.92, 0.03, -35]} castShadow receiveShadow>
+        <boxGeometry args={[0.12, 1.2, 82]} />
+        <meshStandardMaterial color="#f0c49b" roughness={0.9} flatShading />
+      </mesh>
+      <mesh position={[4.92, 0.03, -35]} castShadow receiveShadow>
+        <boxGeometry args={[0.12, 1.2, 82]} />
+        <meshStandardMaterial color="#a9cdb2" roughness={0.9} flatShading />
+      </mesh>
+      <mesh position={[-4.88, 0.65, -35]} castShadow>
+        <boxGeometry args={[0.18, 0.12, 82]} />
+        <meshStandardMaterial color="#fff8e7" flatShading />
+      </mesh>
+      <mesh position={[4.88, 0.65, -35]} castShadow>
+        <boxGeometry args={[0.18, 0.12, 82]} />
+        <meshStandardMaterial color="#fff8e7" flatShading />
       </mesh>
       <KitchenProps />
       <mesh position={[0, GROUND_Y, -35]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow={true}>
