@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { EffectComposer, SSAO } from '@react-three/postprocessing'
 import { CanvasTexture, MathUtils, RepeatWrapping } from 'three'
+import MainMenu from './components/MainMenu'
+import ThreeMenuCanvas from './components/ThreeMenuScene'
 
 const KEY = 'endless-runner-high-score'
 const LANES = [-2.4, 0, 2.4]
@@ -887,92 +889,24 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
   )
 }
 
-function MenuBackground({ theme }) {
-  return (
-    <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 3.5, 7], fov: 55 }}>
-      <GameScene
-        active={false}
-        isPaused={false}
-        isCaught={false}
-        cinematic
-        theme={theme}
-        baseSpeed={6}
-        maxSpeed={18}
-        onScore={() => {}}
-        onCaught={() => {}}
-        onCoin={() => {}}
-      />
-      <EffectComposer multisampling={0} enableNormalPass>
-        <SSAO radius={0.25} intensity={1.2} luminanceInfluence={0.7} samples={16} />
-      </EffectComposer>
-    </Canvas>
-  )
-}
-
-function MainMenu({ onStart, onHighScore, onExit, theme, onTheme }) {
-  const [difficulty, setDifficulty] = useState('Easy')
-  const [speed, setSpeed] = useState(DIFFICULTIES.Easy.baseSpeed)
-  const profile = DIFFICULTIES[difficulty]
-  const motion = 'transition-transform hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
-  const option = (selected) => `rounded-xl border-4 border-black px-3 py-2 uppercase font-black tracking-wider ${motion} ${selected ? 'bg-yellow-400 text-black' : 'bg-cyan-400 text-black'}`
-
-  const chooseDifficulty = (name) => {
-    setDifficulty(name)
-    setSpeed(DIFFICULTIES[name].baseSpeed)
-  }
-
-  return (
-    <div className="flex min-h-screen w-full flex-col items-center justify-center bg-black/50 px-4 py-8 text-white backdrop-blur-sm sm:px-6">
-      <div className="w-full max-w-md rounded-2xl border-4 border-black bg-amber-900 p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] sm:p-8">
-        <div className="text-center">
-          <div className="mb-2 text-4xl" aria-hidden="true">🧀</div>
-          <h1 className="text-5xl uppercase font-black tracking-wider text-yellow-400 drop-shadow-[3px_3px_0px_#000] sm:text-6xl">Cheese Chase</h1>
-          <p className="mt-4 text-sm font-bold text-yellow-50">Dodge the blocks and stay on the road.</p>
-        </div>
-
-        <div className="mt-8">
-          <p className="mb-3 uppercase font-black tracking-wider text-yellow-100">Theme</p>
-          <div className="mb-6 grid grid-cols-2 gap-3">
-            {['day', 'night'].map((mode) => (
-              <button key={mode} onClick={() => onTheme(mode)} className={option(theme === mode)}>
-                {mode === 'day' ? '☀ ' : '☾ '}{mode}
-              </button>
-            ))}
-          </div>
-          <p className="mb-3 uppercase font-black tracking-wider text-yellow-100">Difficulty</p>
-          <div className="grid grid-cols-3 gap-2">
-            {Object.keys(DIFFICULTIES).map((name) => (
-              <button key={name} onClick={() => chooseDifficulty(name)} className={option(difficulty === name)}>
-                {name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <label className="mt-6 block font-bold text-yellow-50">
-          Starting speed: <b className="text-yellow-300">{speed}</b>
-          <input type="range" min="1" max="10" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} className="mt-3 w-full accent-yellow-400" />
-          <span className="mt-1 flex justify-between text-xs font-black"><span>1</span><span>10</span></span>
-        </label>
-
-        <p className="mt-4 text-center text-xs font-bold text-yellow-100">Max speed: {profile.maxSpeed} · A/D or ←/→ to move</p>
-        <div className="mt-6 space-y-4">
-          <button onClick={() => onStart({ baseSpeed: speed, maxSpeed: profile.maxSpeed })} className={`w-full rounded-xl border-4 border-black bg-yellow-400 px-4 py-3 uppercase font-black tracking-wider text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${motion}`}>▶ Start Game</button>
-          <button onClick={onHighScore} className={`w-full rounded-xl border-4 border-black bg-cyan-400 px-4 py-3 uppercase font-black tracking-wider text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${motion}`}>🏆 High Score</button>
-          <button onClick={onExit} className={`w-full rounded-xl border-4 border-black bg-cyan-400 px-4 py-3 uppercase font-black tracking-wider text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${motion}`}>↪ Exit Game</button>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 function HighScore({ score, onBack }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#070b1a] text-center text-white">
-      <div className="p-6">
-        <p className="font-mono text-xs uppercase tracking-[0.3em] text-cyan-300">Best run</p>
-        <h1 className="mt-3 text-6xl font-black">{score}</h1>
-        <button onClick={onBack} className="menu-button mt-8">Back to Menu</button>
+    <div className="font-cartoon flex min-h-screen items-center justify-center bg-[#291710] px-4 text-center text-white select-none">
+      <div className="w-full max-w-sm rounded-[32px] bg-[#3e261d] p-8 shadow-[inset_0_1px_1px_rgba(255,255,255,0.18),0_20px_45px_rgba(0,0,0,0.65)] border border-[#523326]/60">
+        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#543426] text-3xl">
+          🏆
+        </div>
+        <p className="text-xs font-bold uppercase tracking-widest text-[#cbb39e]">Best Run</p>
+        <h1 className="mt-2 text-6xl font-black text-[#fed23a]">{score}</h1>
+        <p className="mt-2 text-sm text-[#ba9f8b]">Keep running to beat your record!</p>
+        <button
+          type="button"
+          onClick={onBack}
+          className="mt-7 w-full btn-3d-yellow py-3 rounded-2xl font-bold text-base"
+        >
+          Back to Menu
+        </button>
       </div>
     </div>
   )
@@ -980,31 +914,60 @@ function HighScore({ score, onBack }) {
 
 function UIOverlay({ score, coinCount, isPaused, gameOver, onRestart, onMenu, onResume }) {
   return (
-    <div className="font-cartoon pointer-events-none absolute inset-0">
-      <div className="absolute left-5 top-5 border border-cyan-300/20 bg-slate-950/75 px-4 py-2 font-mono text-xs text-slate-400">
-        <span className="font-black text-yellow-300">CHEESE CHASE</span> · A/D or ←/→
+    <div className="font-cartoon pointer-events-none absolute inset-0 select-none">
+      <div className="absolute left-5 top-5 rounded-xl border border-[#fed23a]/30 bg-[#321c13]/85 px-4 py-2 text-xs text-[#d8c3b0] shadow-lg backdrop-blur-sm">
+        <span className="font-black text-[#fed23a]">CHEESE CHASE</span> · A/D or ←/→
       </div>
-      <div className="absolute right-5 top-5 flex gap-4 border border-cyan-300/30 bg-slate-950/75 px-4 py-2 font-mono text-sm">
-        <span className="font-black text-cyan-200">SCORE {score.toString().padStart(4, '0')}</span>
-        <span className="font-black text-yellow-300">CHEESE: {coinCount}</span>
+      <div className="absolute right-5 top-5 flex gap-4 rounded-xl border border-[#fed23a]/30 bg-[#321c13]/85 px-4 py-2 text-sm text-white shadow-lg backdrop-blur-sm">
+        <span className="font-black text-[#ffd369]">SCORE {score.toString().padStart(4, '0')}</span>
+        <span className="font-black text-[#ffbd38]">🧀 {coinCount}</span>
       </div>
       {isPaused && !gameOver && (
-        <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-slate-950/70 p-6">
-          <div className="w-full max-w-sm border border-cyan-300/40 bg-slate-950 p-7 text-center text-white">
-            <p className="font-mono text-xs uppercase tracking-[0.3em] text-cyan-300">Game paused</p>
-            <h1 className="mt-3 text-4xl font-black">PAUSED</h1>
-            <button onClick={onResume} className="menu-button mt-6">Resume</button>
+        <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-[30px] border border-[#523326]/70 bg-[#3e261d] p-7 text-center text-white shadow-2xl">
+            <p className="text-xs font-bold uppercase tracking-widest text-[#cbb39e]">Game Paused</p>
+            <h1 className="mt-2 text-4xl font-black text-[#fed23a]">PAUSED</h1>
+            <div className="mt-6 space-y-3">
+              <button
+                type="button"
+                onClick={onResume}
+                className="w-full btn-3d-yellow py-2.5 rounded-2xl font-bold text-base"
+              >
+                Resume
+              </button>
+              <button
+                type="button"
+                onClick={onMenu}
+                className="w-full btn-3d-brown py-2.5 rounded-2xl font-bold text-sm"
+              >
+                Back to Menu
+              </button>
+            </div>
           </div>
         </div>
       )}
       {gameOver && (
-        <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-slate-950/65 p-6">
-          <div className="w-full max-w-sm border border-red-400/40 bg-slate-950 p-7 text-center text-white">
-            <p className="font-mono text-xs uppercase tracking-[0.3em] text-red-300">Run ended</p>
-            <h1 className="mt-3 text-4xl font-black">Game over</h1>
-            <p className="mt-3 text-slate-300">Final score: {score}</p>
-            <button onClick={onRestart} className="menu-button mt-6">Restart</button>
-            <button onClick={onMenu} className="mt-3 text-sm text-slate-400 underline">Menu</button>
+        <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-black/65 p-6 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-[30px] border border-[#523326]/70 bg-[#3e261d] p-7 text-center text-white shadow-2xl">
+            <p className="text-xs font-bold uppercase tracking-widest text-[#ff7979]">Run Ended</p>
+            <h1 className="mt-2 text-4xl font-black text-[#fed23a]">Game Over</h1>
+            <p className="mt-2 text-[#d8c3b0]">Final Score: <strong className="text-white text-lg">{score}</strong></p>
+            <div className="mt-6 space-y-3">
+              <button
+                type="button"
+                onClick={onRestart}
+                className="w-full btn-3d-yellow py-2.5 rounded-2xl font-bold text-base"
+              >
+                Restart
+              </button>
+              <button
+                type="button"
+                onClick={onMenu}
+                className="w-full btn-3d-brown py-2.5 rounded-2xl font-bold text-sm"
+              >
+                Back to Menu
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1022,7 +985,7 @@ export default function App() {
   const catchTimer = useRef()
   const [best, setBest] = useState(() => readBest())
   const [run, setRun] = useState(0)
-  const [settings, setSettings] = useState(DIFFICULTIES.Medium)
+  const [settings, setSettings] = useState(DIFFICULTIES.Easy)
   const hits = useRef(0)
 
   useEffect(() => {
@@ -1073,19 +1036,47 @@ export default function App() {
 
   if (screen === 'menu') {
     return (
-      <div className="relative min-h-screen w-full overflow-hidden bg-[#3b2117]">
-        <div className="absolute inset-0 scale-105 blur-[3px]">
-          <MenuBackground theme={theme} />
+      <ThreeMenuCanvas theme={theme}>
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-4">
+          <div className="pointer-events-auto">
+            <MainMenu
+              theme={theme}
+              onTheme={setTheme}
+              onStart={start}
+              onHighScore={() => {
+                setBest(readBest())
+                setScreen('highscore')
+              }}
+              onExit={() => setScreen('exit')}
+            />
+          </div>
         </div>
-        <div className="relative z-10">
-          <MainMenu theme={theme} onTheme={setTheme} onStart={start} onHighScore={() => { setBest(readBest()); setScreen('highscore') }} onExit={() => setScreen('exit')} />
+      </ThreeMenuCanvas>
+    )
+  }
+
+  if (screen === 'highscore') return <HighScore score={best} onBack={() => setScreen('menu')} />
+  if (screen === 'exit') {
+    return (
+      <div className="font-cartoon flex min-h-screen items-center justify-center bg-[#291710] p-4 text-center text-white select-none">
+        <div className="w-full max-w-sm rounded-[32px] bg-[#3e261d] p-8 shadow-2xl border border-[#523326]/60">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#543426] text-3xl">
+            🧀
+          </div>
+          <h1 className="text-3xl font-black text-[#fed23a]">Thanks for Playing!</h1>
+          <p className="mt-3 text-sm text-[#ba9f8b]">Cheese Chase POC Demo</p>
+          <button
+            type="button"
+            onClick={() => setScreen('menu')}
+            className="mt-6 w-full btn-3d-yellow py-3 rounded-2xl font-bold text-base"
+          >
+            Play Again
+          </button>
         </div>
       </div>
     )
   }
 
-  if (screen === 'highscore') return <HighScore score={best} onBack={() => setScreen('menu')} />
-  if (screen === 'exit') return <div className="flex min-h-screen items-center justify-center bg-black text-white">Thanks for playing</div>
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-[#3b2117]">
