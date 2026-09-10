@@ -1,0 +1,11 @@
+Model Information:
+* title:	Brick Wall
+* source:	https://sketchfab.com/3d-models/brick-wall-122b8b58ff544b018629a178b5880553
+* author:	Ha4ris_Dev (https://sketchfab.com/Ha4ris_Dev)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Brick Wall" (https://sketchfab.com/3d-models/brick-wall-122b8b58ff544b018629a178b5880553) by Ha4ris_Dev (https://sketchfab.com/Ha4ris_Dev) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

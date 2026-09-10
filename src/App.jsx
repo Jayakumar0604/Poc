@@ -5,6 +5,7 @@ import { CanvasTexture, MathUtils, RepeatWrapping } from 'three'
 import MainMenu from './components/MainMenu'
 import ThreeMenuCanvas from './components/ThreeMenuScene'
 import CatModel from './components/CatModel'
+import LampModel from './components/LampModel'
 
 const KEY = 'endless-runner-high-score'
 const LANES = [-1.5, 0, 1.5]
@@ -71,23 +72,11 @@ function Lighting({ theme }) {
 
 function TableLamp({ theme }) {
   return (
-    <group>
-      <mesh position={[0, 0.15, 0]} castShadow>
-        <cylinderGeometry args={[0.45, 0.55, 0.3, 8]} />
-        <meshStandardMaterial color="#c08457" flatShading />
-      </mesh>
-      <mesh position={[0, 0.9, 0]} castShadow>
-        <cylinderGeometry args={[0.06, 0.06, 1.5, 8]} />
-        <meshStandardMaterial color="#8b5e3c" flatShading />
-      </mesh>
-      <mesh position={[0, 1.7, 0]} castShadow>
-        <coneGeometry args={[0.55, 0.65, 8]} />
-        <meshStandardMaterial color="#ffd166" emissive="#ffaa00" emissiveIntensity={0.5} flatShading />
-      </mesh>
-      {theme === 'night' && (
-        <pointLight position={[0, 1.7, 0]} intensity={12} distance={12} decay={2} color="#ffcc77" />
-      )}
-    </group>
+    <LampModel
+      theme={theme}
+      scale={0.065}
+      position={[0, 0, 0]}
+    />
   )
 }
 

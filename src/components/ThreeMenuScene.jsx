@@ -1,6 +1,7 @@
 import { useMemo, useRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { CanvasTexture, RepeatWrapping } from 'three'
+import LampModel from './LampModel'
 
 const GROUND_Y = -0.6
 
@@ -264,38 +265,13 @@ function SignPost() {
  * Street Lantern on Right Wall
  */
 function StreetLantern({ theme }) {
-  const isNight = theme === 'night'
-
   return (
-    <group position={[3.85, GROUND_Y + 1.8, -0.8]} rotation={[0, -Math.PI / 2, 0]}>
-      {/* Wall mount base */}
-      <mesh position={[0, 0, -0.2]} castShadow>
-        <boxGeometry args={[0.2, 0.45, 0.15]} />
-        <meshStandardMaterial color="#4a2c1a" roughness={0.8} />
-      </mesh>
-
-      {/* Lamp post arm */}
-      <mesh position={[0, 0.15, 0]} castShadow>
-        <cylinderGeometry args={[0.07, 0.09, 0.7, 8]} />
-        <meshStandardMaterial color="#5a3722" roughness={0.8} />
-      </mesh>
-
-      {/* Glowing Lamp Head */}
-      <mesh position={[0, 0.65, 0]} castShadow>
-        <coneGeometry args={[0.32, 0.42, 8]} />
-        <meshStandardMaterial
-          color="#ffc74c"
-          emissive="#ff9900"
-          emissiveIntensity={isNight ? 2.0 : 0.6}
-          roughness={0.2}
-        />
-      </mesh>
-
-      {/* Night mode warm point light */}
-      {isNight && (
-        <pointLight position={[0, 0.65, 0.2]} intensity={14} distance={15} decay={2} color="#ffab36" />
-      )}
-    </group>
+    <LampModel
+      theme={theme}
+      scale={0.075}
+      position={[2.85, GROUND_Y, -0.9]}
+      rotation={[0, Math.PI / 4, 0]}
+    />
   )
 }
 
