@@ -6,6 +6,7 @@ import MainMenu from './components/MainMenu'
 import ThreeMenuCanvas from './components/ThreeMenuScene'
 import CatModel from './components/CatModel'
 import LampModel from './components/LampModel'
+import MousetrapModel from './components/MousetrapModel'
 
 const KEY = 'endless-runner-high-score'
 const LANES = [-1.5, 0, 1.5]
@@ -479,14 +480,7 @@ function Obstacle({ type, position, obstacleRef }) {
   if (type === 'mousetrap') {
     return (
       <group ref={obstacleRef} position={position}>
-        <mesh position={[0, 0.08, 0]} castShadow receiveShadow>
-          <boxGeometry args={[1.4, 0.16, 1.2]} />
-          <meshStandardMaterial color={materials.mousetrap} flatShading />
-        </mesh>
-        <mesh position={[0, 0.22, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
-          <cylinderGeometry args={[0.06, 0.06, 1.1, 8]} />
-          <meshStandardMaterial color="#e5e7eb" flatShading />
-        </mesh>
+        <MousetrapModel />
       </group>
     )
   }
