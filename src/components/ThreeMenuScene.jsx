@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { CanvasTexture, RepeatWrapping } from 'three'
 import LampModel from './LampModel'
+import CheeseModel from './CheeseModel'
 
 const GROUND_Y = -0.6
 
@@ -107,40 +108,20 @@ function useSignTexture(text) {
 }
 
 /**
- * Swiss Cheese Cube with flat, crater-like holes on visible faces
+ * 3D Swiss Cheese Block using textured cheese model
  */
 function SwissCheese({ position = [0, 0, 0], rotation = [0, 0, 0], scale = [1, 1, 1] }) {
-  const holes = useMemo(() => [
-    // Front face (z = 0.501)
-    { pos: [-0.22, 0.18, 0.501], r: 0.16, rot: [0, 0, 0] },
-    { pos: [0.26, -0.15, 0.501], r: 0.22, rot: [0, 0, 0] },
-    { pos: [-0.12, -0.28, 0.501], r: 0.11, rot: [0, 0, 0] },
-    { pos: [0.18, 0.28, 0.501], r: 0.12, rot: [0, 0, 0] },
-    // Top face (y = 0.501)
-    { pos: [0.15, 0.501, 0.18], r: 0.18, rot: [Math.PI / 2, 0, 0] },
-    { pos: [-0.2, 0.501, -0.14], r: 0.22, rot: [Math.PI / 2, 0, 0] },
-    { pos: [0.25, 0.501, -0.2], r: 0.13, rot: [Math.PI / 2, 0, 0] },
-    // Left face (x = -0.501)
-    { pos: [-0.501, 0.12, -0.15], r: 0.2, rot: [0, Math.PI / 2, 0] },
-    { pos: [-0.501, -0.22, 0.2], r: 0.16, rot: [0, Math.PI / 2, 0] },
-  ], [])
+  const scaleVector = Array.isArray(scale)
+    ? [scale[0] * 5.0, scale[1] * 8.33, scale[2] * 8.33]
+    : [scale * 5.0, scale * 8.33, scale * 8.33]
 
   return (
-    <group position={position} rotation={rotation} scale={scale}>
-      {/* Main Yellow Cheese Cube */}
-      <mesh castShadow receiveShadow>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color="#fec92b" roughness={0.35} metalness={0.05} />
-      </mesh>
-
-      {/* Recessed Crater Holes (flush with surfaces) */}
-      {holes.map((h, i) => (
-        <mesh key={i} position={h.pos} rotation={h.rot}>
-          <cylinderGeometry args={[h.r, h.r, 0.005, 20]} />
-          <meshBasicMaterial color="#c4780c" />
-        </mesh>
-      ))}
-    </group>
+    <CheeseModel
+      position={position}
+      rotation={rotation}
+      scale={scaleVector}
+      centerOrigin
+    />
   )
 }
 

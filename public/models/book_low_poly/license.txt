@@ -1,0 +1,11 @@
+Model Information:
+* title:	Book Low Poly
+* source:	https://sketchfab.com/3d-models/book-low-poly-d6465435cb3241f9a550067e34c28918
+* author:	DiegoVega (https://sketchfab.com/DiegoVega)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Book Low Poly" (https://sketchfab.com/3d-models/book-low-poly-d6465435cb3241f9a550067e34c28918) by DiegoVega (https://sketchfab.com/DiegoVega) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

@@ -7,6 +7,8 @@ import ThreeMenuCanvas from './components/ThreeMenuScene'
 import CatModel from './components/CatModel'
 import LampModel from './components/LampModel'
 import MousetrapModel from './components/MousetrapModel'
+import CheeseModel from './components/CheeseModel'
+import { BookArchObstacle } from './components/BookModel'
 
 const KEY = 'endless-runner-high-score'
 const FPS_KEY = 'show-fps-counter'
@@ -15,7 +17,7 @@ const GROUND_Y = -0.57
 const MOUSE_GROUND_Y = GROUND_Y + 0.2
 const CAT_GROUND_Y = GROUND_Y + 0.55
 const CHEESE_GROUND_Y = GROUND_Y + 0.3
-const OVERHEAD_TYPES = ['table', 'pencils', 'book']
+const OVERHEAD_TYPES = ['table', 'book', 'pencils']
 const MOVING_TYPES = ['milk', 'mousetrap', 'yarn']
 const MIN_OBJECT_GAP = 10
 const INITIAL_CHEESE_REQUESTS = 4
@@ -207,18 +209,7 @@ function MenuDecor() {
     <>
       {cheeseBlocks.map(([x, y, z], index) => (
         <group key={`cheese-${index}`} position={[x, y, z]} rotation={[0, index * 0.4, 0]}>
-          <mesh castShadow receiveShadow>
-            <boxGeometry args={[1.4, 1.4, 1.4]} />
-            <meshStandardMaterial color="#ffca28" flatShading />
-          </mesh>
-          <mesh position={[-0.35, 0.3, -0.72]}>
-            <sphereGeometry args={[0.14, 6, 5]} />
-            <meshStandardMaterial color="#d88b18" flatShading />
-          </mesh>
-          <mesh position={[0.25, -0.25, -0.72]}>
-            <sphereGeometry args={[0.1, 6, 5]} />
-            <meshStandardMaterial color="#d88b18" flatShading />
-          </mesh>
+          <CheeseModel scale={[7.0, 11.6, 11.6]} centerOrigin />
         </group>
       ))}
       {trees.map(([x, z], index) => (
@@ -422,7 +413,6 @@ function MilkBowl({ position, obstacleRef }) {
 
 function Obstacle({ type, position, obstacleRef }) {
   const materials = useMemo(() => ({
-    book: '#3478c5',
     milk: '#fff7e6',
     mousetrap: '#d64545',
     table: '#b7794b',
@@ -454,18 +444,7 @@ function Obstacle({ type, position, obstacleRef }) {
   if (type === 'book') {
     return (
       <group ref={obstacleRef} position={position}>
-        <mesh position={[-1.2, 0.6, 0]} castShadow receiveShadow>
-          <boxGeometry args={[0.2, 1.2, 1]} />
-          <meshStandardMaterial color={materials.book} flatShading />
-        </mesh>
-        <mesh position={[1.2, 0.6, 0]} castShadow receiveShadow>
-          <boxGeometry args={[0.2, 1.2, 1]} />
-          <meshStandardMaterial color="#d64545" flatShading />
-        </mesh>
-        <mesh position={[0, 1.3, 0]} castShadow receiveShadow>
-          <boxGeometry args={[3, 0.2, 1.5]} />
-          <meshStandardMaterial color={materials.book} flatShading />
-        </mesh>
+        <BookArchObstacle />
       </group>
     )
   }
@@ -598,10 +577,9 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, onCollect, on
   })
 
   return (
-    <mesh ref={ref} position={[coin.x, coin.y, coin.z]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-      <cylinderGeometry args={[0.3, 0.3, 0.15, 3]} />
-      <meshStandardMaterial color="#ffcc00" flatShading />
-    </mesh>
+    <group ref={ref} position={[coin.x, coin.y, coin.z]}>
+      <CheeseModel scale={coin.superCoin ? 3.8 : 2.8} centerOrigin />
+    </group>
   )
 }
 
