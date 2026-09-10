@@ -72,11 +72,13 @@ function GearIcon() {
  * @param {Object} props
  * @param {string} props.theme - 'day' | 'night'
  * @param {(theme: string) => void} props.onTheme
+ * @param {boolean} props.showFps
+ * @param {() => void} props.onToggleFps
  * @param {(settings: { baseSpeed: number, maxSpeed: number, difficulty: string }) => void} props.onStart
  * @param {() => void} props.onHighScore
  * @param {() => void} props.onExit
  */
-export default function MainMenu({ theme, onTheme, onStart, onHighScore, onExit }) {
+export default function MainMenu({ theme, showFps, onTheme, onToggleFps, onStart, onHighScore, onExit }) {
   const [difficulty, setDifficulty] = useState('Easy')
   const [speed, setSpeed] = useState(DIFFICULTIES.Easy.baseSpeed)
   const profile = DIFFICULTIES[difficulty]
@@ -138,6 +140,24 @@ export default function MainMenu({ theme, onTheme, onStart, onHighScore, onExit 
               <span>Night</span>
             </button>
           </div>
+        </div>
+
+        {/* Display Settings */}
+        <div className="mb-3.5">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-[#a88a75] mb-1.5">
+            Display
+          </span>
+          <button
+            type="button"
+            onClick={onToggleFps}
+            aria-pressed={showFps}
+            className={`w-full flex items-center justify-between py-1.5 px-3 rounded-xl font-bold text-[12.5px] tracking-wide transition-all ${
+              showFps ? 'btn-3d-green' : 'btn-3d-dark'
+            }`}
+          >
+            <span>FPS Counter</span>
+            <span className="text-[10px] uppercase tracking-wider">{showFps ? 'On' : 'Off'}</span>
+          </button>
         </div>
 
         {/* Difficulty Selector */}

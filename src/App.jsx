@@ -9,6 +9,7 @@ import LampModel from './components/LampModel'
 import MousetrapModel from './components/MousetrapModel'
 
 const KEY = 'endless-runner-high-score'
+const FPS_KEY = 'show-fps-counter'
 const LANES = [-1.5, 0, 1.5]
 const GROUND_Y = -0.57
 const MOUSE_GROUND_Y = GROUND_Y + 0.2
@@ -28,6 +29,7 @@ const DIFFICULTIES = {
   Hard: { baseSpeed: 9, maxSpeed: 26 },
 }
 const readBest = () => Number(localStorage.getItem(KEY)) || 0
+const readFpsPreference = () => localStorage.getItem(FPS_KEY) !== 'false'
 const coinFits = (z, lane, obstacles, positions) => (
   obstacles.every((obstacle) => (
     Math.abs(obstacle.x - lane) >= 0.9 || Math.abs(obstacle.z - z) >= MIN_OBJECT_GAP
@@ -777,7 +779,7 @@ function Environment({ active, speedRef }) {
   )
 }
 
-function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseSpeed, maxSpeed, invincibleTime, onScore, onCaught, onMilk, onCoin }) {
+function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseSpeed, maxSpeed, invincibleTime, showFps, onFps, onScore, onCaught, onMilk, onCoin }) {
   const player = useRef()
   const cat = useRef()
   const obstacles = useRef([])
@@ -785,10 +787,21 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
   const lastScore = useRef(0)
   const currentSpeed = useRef(baseSpeed)
   const playerStats = useRef({ hits: 0, lastHitTime: 0, invincibleUntil: 0 })
+  const fpsElapsed = useRef(0)
+  const fpsFrames = useRef(0)
   const coinPositions = useRef(new Map())
   const cheeseRequests = useRef(INITIAL_CHEESE_REQUESTS)
 
   useFrame((state, delta) => {
+    if (showFps) {
+      fpsElapsed.current += delta
+      fpsFrames.current += 1
+      if (fpsElapsed.current >= 0.5) {
+        onFps(Math.round(fpsFrames.current / fpsElapsed.current))
+        fpsElapsed.current = 0
+        fpsFrames.current = 0
+      }
+    }
     if (isPaused || isCaught) return
     if (!active) return
     currentSpeed.current = Math.min(currentSpeed.current + delta * 0.4, maxSpeed)
@@ -880,7 +893,7 @@ function HighScore({ score, onBack }) {
   )
 }
 
-function UIOverlay({ score, coinCount, invincibleTime, isPaused, gameOver, onRestart, onMenu, onResume }) {
+function UIOverlay({ score, coinCount, fps, showFps, invincibleTime, isPaused, gameOver, onRestart, onMenu, onResume }) {
   return (
     <div className="font-cartoon pointer-events-none absolute inset-0 select-none">
       <div className="absolute left-5 top-5 rounded-xl border border-[#fed23a]/30 bg-[#321c13]/85 px-4 py-2 text-xs text-[#d8c3b0] shadow-lg backdrop-blur-sm">
@@ -890,6 +903,7 @@ function UIOverlay({ score, coinCount, invincibleTime, isPaused, gameOver, onRes
         <span className="font-black text-[#ffd369]">SCORE {score.toString().padStart(4, '0')}</span>
         <span className="font-black text-[#ffbd38]">🧀 {coinCount}</span>
       </div>
+      {showFps && <div className="absolute left-5 top-[4.5rem] rounded-xl border border-[#86efac]/30 bg-[#321c13]/85 px-3 py-1.5 text-xs font-black text-[#86efac] shadow-lg backdrop-blur-sm">{fps} FPS</div>}
       {invincibleTime > 0 && <div className="absolute top-24 left-1/2 -translate-x-1/2 bg-blue-500 border-4 border-black text-white font-black text-3xl px-6 py-2 rounded-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-bounce">MILK POWER: {invincibleTime}s</div>}
       {isPaused && !gameOver && (
         <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm">
@@ -948,6 +962,8 @@ export default function App() {
   const [screen, setScreen] = useState('menu')
   const [score, setScore] = useState(0)
   const [coinCount, setCoinCount] = useState(0)
+  const [fps, setFps] = useState(0)
+  const [showFps, setShowFps] = useState(() => readFpsPreference())
   const [invincibleTime, setInvincibleTime] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
   const [isCaught, setIsCaught] = useState(false)
@@ -968,6 +984,14 @@ export default function App() {
     return () => window.removeEventListener('keydown', togglePause)
   }, [screen])
 
+  const toggleFps = () => {
+    setShowFps((value) => {
+      const nextValue = !value
+      localStorage.setItem(FPS_KEY, String(nextValue))
+      return nextValue
+    })
+  }
+
   const start = (nextSettings = settings) => {
     clearTimeout(catchTimer.current)
     setSettings(nextSettings)
@@ -975,6 +999,7 @@ export default function App() {
     setIsCaught(false)
     setScore(0)
     setCoinCount(0)
+    setFps(0)
     setInvincibleTime(3)
     hits.current = 0
     setRun((value) => value + 1)
@@ -1019,6 +1044,8 @@ export default function App() {
             <MainMenu
               theme={theme}
               onTheme={setTheme}
+              showFps={showFps}
+              onToggleFps={toggleFps}
               onStart={start}
               onHighScore={() => {
                 setBest(readBest())
@@ -1068,6 +1095,8 @@ export default function App() {
           baseSpeed={settings.baseSpeed}
           maxSpeed={settings.maxSpeed}
           invincibleTime={invincibleTime}
+          showFps={showFps}
+          onFps={setFps}
           onScore={setScore}
           onCoin={(value) => setCoinCount((total) => total + value)}
           onMilk={() => setInvincibleTime(5)}
@@ -1080,6 +1109,8 @@ export default function App() {
       <UIOverlay
         score={score}
         coinCount={coinCount}
+        fps={fps}
+        showFps={showFps}
         invincibleTime={invincibleTime}
         isPaused={isPaused}
         gameOver={screen === 'gameover'}
