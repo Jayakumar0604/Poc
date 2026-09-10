@@ -94,7 +94,7 @@ export default function MainMenu({ theme, showFps, onTheme, onToggleFps, onStart
   return (
     <div className="font-cartoon flex flex-col items-center select-none w-full max-w-[340px] sm:max-w-[355px]">
       {/* 3D Cheese Chase Logo with radiant Cheese Wedge */}
-      <div className="relative -mb-3 z-10 select-none pointer-events-none">
+      <div className="relative -mb-3 z-10 select-none pointer-events-none animate-float">
         <img
           src="/logo-transparent.png"
           alt="Cheese Chase"
@@ -222,7 +222,7 @@ export default function MainMenu({ theme, showFps, onTheme, onToggleFps, onStart
           <button
             type="button"
             onClick={() => onStart({ baseSpeed: speed, maxSpeed: profile.maxSpeed, difficulty })}
-            className="w-full btn-3d-yellow py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 font-black text-[14.5px] tracking-wide"
+            className="w-full btn-3d-yellow btn-pulse-play py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 font-black text-[14.5px] tracking-wide"
           >
             <PlayIcon />
             <span>Start Game</span>

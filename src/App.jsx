@@ -242,17 +242,22 @@ function MenuDecor() {
 
 function Mouse({ playerRef, active, cinematic }) {
   const mouseRef = useRef()
+  const tailRef = useRef()
   const velocity = useRef(0)
   const grounded = useRef(true)
   const ducking = useRef(false)
+  const targetX = useRef(cinematic ? -2.4 : 0)
+  const landSquash = useRef(1)
+
   const attachMouse = useCallback((node) => {
     mouseRef.current = node
     playerRef.current = node
   }, [playerRef])
+
   const setDuck = useCallback((value) => {
     const player = mouseRef.current
     if (!player) return
-    player.scale.set(1, value ? 0.5 : 1, 1)
+    player.scale.set(1, value ? 0.45 : 1, 1)
     player.position.y = value ? GROUND_Y + 0.1 : MOUSE_GROUND_Y
   }, [])
 
@@ -278,7 +283,7 @@ function Mouse({ playerRef, active, cinematic }) {
       }
       if (['a', 'd', 'arrowleft', 'arrowright'].includes(key)) {
         const direction = key === 'a' || key === 'arrowleft' ? -1 : 1
-        playerRef.current.position.x = Math.max(-2.8, Math.min(2.8, playerRef.current.position.x + direction * 2.4))
+        targetX.current = Math.max(-2.4, Math.min(2.4, targetX.current + direction * 2.4))
       }
     }
     const stopDuck = (event) => {
@@ -298,6 +303,16 @@ function Mouse({ playerRef, active, cinematic }) {
   useFrame((state, delta) => {
     if (!active || !mouseRef.current) return
     const player = mouseRef.current
+    const t = state.clock.elapsedTime
+
+    // Responsive, smooth lane transition with banking & yaw
+    const currentX = player.position.x
+    const newX = MathUtils.lerp(currentX, targetX.current, Math.min(1, delta * 16))
+    player.position.x = newX
+    const dx = targetX.current - newX
+    const bankZ = -dx * 0.35
+    const yawY = dx * 0.2
+
     if (!grounded.current) {
       velocity.current -= 30 * delta
       player.position.y += velocity.current * delta
@@ -305,12 +320,41 @@ function Mouse({ playerRef, active, cinematic }) {
         player.position.y = MOUSE_GROUND_Y
         velocity.current = 0
         grounded.current = true
+        landSquash.current = 0.72 // Squash on landing impact
       }
     }
-    if (grounded.current) {
-      setDuck(ducking.current)
-      mouseRef.current.rotation.z = Math.sin(state.clock.elapsedTime * 15) * 0.1
-      mouseRef.current.position.y = (ducking.current ? GROUND_Y + 0.1 : MOUSE_GROUND_Y) + Math.abs(Math.sin(state.clock.elapsedTime * 15)) * 0.05
+
+    landSquash.current = MathUtils.lerp(landSquash.current, 1, Math.min(1, delta * 10))
+
+    if (ducking.current) {
+      // Sleek torpedo belly slide with low collision profile
+      player.scale.set(1.15, 0.45, 1.4)
+      player.position.y = GROUND_Y + 0.1 + Math.sin(t * 22) * 0.02
+      player.rotation.z = bankZ + Math.sin(t * 22) * 0.04
+      player.rotation.x = -0.05
+      player.rotation.y = yawY
+    } else if (!grounded.current) {
+      // Airborne stretch & arc tilt
+      const jumpStretch = Math.max(0.85, Math.min(1.3, 1 + velocity.current * 0.025))
+      player.scale.set(1 / Math.sqrt(jumpStretch), jumpStretch * landSquash.current, 1 / Math.sqrt(jumpStretch))
+      player.rotation.x = -velocity.current * 0.025
+      player.rotation.z = bankZ
+      player.rotation.y = yawY
+    } else {
+      // Energetic ground running stride with squash & stretch
+      const gallop = Math.sin(t * 18)
+      player.position.y = MOUSE_GROUND_Y + Math.abs(gallop) * 0.06
+      const bodySquash = (1 + gallop * 0.05) * landSquash.current
+      player.scale.set(1 - gallop * 0.03, bodySquash, 1 + gallop * 0.02)
+      player.rotation.z = bankZ + gallop * 0.08
+      player.rotation.x = 0.04 + Math.max(0, gallop) * 0.05
+      player.rotation.y = yawY
+    }
+
+    // Reactive tail whip
+    if (tailRef.current) {
+      tailRef.current.rotation.z = Math.sin(t * 20) * 0.25 - dx * 0.5
+      tailRef.current.rotation.x = Math.PI / 2 + (ducking.current ? 0.22 : Math.sin(t * 18) * 0.1)
     }
   })
 
@@ -340,7 +384,7 @@ function Mouse({ playerRef, active, cinematic }) {
         <sphereGeometry args={[0.035, 8, 8]} />
         <meshStandardMaterial color="#050505" flatShading />
       </mesh>
-      <mesh position={[0, 0, 0.32]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
+      <mesh ref={tailRef} position={[0, 0, 0.32]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
         <cylinderGeometry args={[0.015, 0.015, 0.6]} />
         <meshStandardMaterial color="#555" flatShading />
       </mesh>
@@ -366,18 +410,30 @@ function Cat({ catRef, playerRef, playerStats, active, isCaught }) {
 
     if (isCaught) {
       cat.visible = true
-      cat.position.lerp({ x: mouse.x, y: CAT_GROUND_Y, z: mouse.z }, Math.min(1, delta * 12))
+      cat.position.lerp({ x: mouse.x, y: CAT_GROUND_Y + 0.1, z: mouse.z + 0.3 }, Math.min(1, delta * 14))
+      cat.rotation.x = 0.22
+      cat.rotation.z = 0
+      cat.rotation.y = Math.PI
+      cat.scale.set(1.05, 0.9, 1.25)
     } else {
       const chase = playerStats.current.hits === 1
       const visible = chase || elapsed < 3
       const targetZ = chase ? mouse.z + 1.4 : visible ? mouse.z + 2.0 : mouse.z + 15
       cat.visible = visible
-      cat.position.x = MathUtils.lerp(cat.position.x, mouse.x, 0.05)
-      cat.position.z = MathUtils.lerp(cat.position.z, targetZ, 0.05)
-    }
+      cat.position.x = MathUtils.lerp(cat.position.x, mouse.x, 0.06)
+      cat.position.z = MathUtils.lerp(cat.position.z, targetZ, 0.06)
 
-    cat.rotation.z = Math.sin(state.clock.elapsedTime * 20) * 0.15
-    cat.position.y = CAT_GROUND_Y + Math.abs(Math.sin(state.clock.elapsedTime * 20)) * 0.1
+      const t = state.clock.elapsedTime
+      const gallop = Math.sin(t * 18)
+      const swerve = mouse.x - cat.position.x
+
+      // Undulating bounding predator gallop
+      cat.rotation.x = gallop * 0.13 + 0.04
+      cat.rotation.z = Math.cos(t * 18) * 0.09 - swerve * 0.28
+      cat.rotation.y = Math.PI + swerve * 0.18
+      cat.position.y = CAT_GROUND_Y + Math.max(0, gallop) * 0.18
+      cat.scale.set(1 - gallop * 0.04, 1 + gallop * 0.06, 1 + gallop * 0.03)
+    }
   })
 
   return (
@@ -389,9 +445,13 @@ function Cat({ catRef, playerRef, playerStats, active, isCaught }) {
 
 function Yarn({ position, obstacleRef }) {
   const ref = useRef()
-  useFrame((state) => {
+  useFrame((state, delta) => {
     if (!ref.current) return
-    ref.current.rotation.y = state.clock.elapsedTime * 2
+    const t = state.clock.elapsedTime
+    ref.current.rotation.x += delta * 7
+    ref.current.rotation.z = Math.sin(t * 6) * 0.18
+    ref.current.rotation.y += delta * 1.5
+    ref.current.position.y = position[1] + 0.5 + Math.abs(Math.sin(t * 14)) * 0.06
   })
 
   return (
@@ -542,12 +602,24 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, onCollect, on
   const z = useRef(coin.z)
   const collected = useRef(false)
 
-  useFrame((_, delta) => {
-    if (!active || collected.current) return
+  useFrame((state, delta) => {
+    if (!active || collected.current || !ref.current) return
     z.current += delta * speedRef.current
     onMove(coin.id, coin.x, z.current)
-    ref.current.rotation.y += delta * 2
-    ref.current.position.set(coin.x, coin.y, z.current)
+
+    const t = state.clock.elapsedTime
+    const floatY = coin.y + Math.sin(t * 3.5 + coin.id * 1.5) * 0.08
+
+    ref.current.rotation.y += delta * 2.8
+    ref.current.rotation.x = Math.sin(t * 2.5 + coin.id) * 0.12
+    ref.current.rotation.z = Math.cos(t * 2.0 + coin.id) * 0.08
+    ref.current.position.set(coin.x, floatY, z.current)
+
+    if (coin.superCoin) {
+      const pulse = 1 + Math.sin(t * 6) * 0.08
+      ref.current.scale.set(pulse, pulse, pulse)
+    }
+
     if (z.current > 6) {
       collected.current = true
       onRemove(coin.id)
@@ -568,7 +640,7 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, onCollect, on
     const p = playerRef.current.position
     if (
       Math.abs(coin.x - p.x) < 0.9 &&
-      Math.abs(coin.y - p.y) < 1 &&
+      Math.abs(floatY - p.y) < 1 &&
       Math.abs(z.current - p.z) < 1.1
     ) {
       collected.current = true
@@ -804,7 +876,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       }
       if (invincibleTime > 0 || playerStats.current.invincibleUntil > state.clock.elapsedTime) continue
       const hitJumpObject = ['milk', 'mousetrap'].includes(obstacle.type) && player.current.position.y < 0.5
-      const hitOverhead = OVERHEAD_TYPES.includes(obstacle.type) && player.current.scale.y === 1
+      const hitOverhead = OVERHEAD_TYPES.includes(obstacle.type) && player.current.scale.y > 0.6
       const collision = hitX && hitZ && (hitJumpObject || hitOverhead || obstacle.type === 'yarn')
 
       if (collision && state.clock.elapsedTime - playerStats.current.lastHitTime > 1.5) {

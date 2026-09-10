@@ -1,6 +1,6 @@
 import { useMemo, useRef } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
-import { CanvasTexture, RepeatWrapping } from 'three'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { CanvasTexture, MathUtils, RepeatWrapping } from 'three'
 import LampModel from './LampModel'
 import CheeseModel from './CheeseModel'
 
@@ -108,37 +108,80 @@ function useSignTexture(text) {
 }
 
 /**
- * 3D Swiss Cheese Block using textured cheese model
+ * 3D Swiss Cheese Block using textured cheese model with subtle idle hover
  */
-function SwissCheese({ position = [0, 0, 0], rotation = [0, 0, 0], scale = [1, 1, 1] }) {
+function SwissCheese({ position = [0, 0, 0], rotation = [0, 0, 0], scale = [1, 1, 1], hover = false }) {
+  const cheeseRef = useRef()
   const scaleVector = Array.isArray(scale)
     ? [scale[0] * 5.0, scale[1] * 8.33, scale[2] * 8.33]
     : [scale * 5.0, scale * 8.33, scale * 8.33]
 
+  useFrame((state) => {
+    if (!hover || !cheeseRef.current) return
+    const t = state.clock.elapsedTime
+    cheeseRef.current.position.y = position[1] + Math.sin(t * 2.2) * 0.035
+    cheeseRef.current.rotation.y = rotation[1] + Math.sin(t * 1.6) * 0.035
+  })
+
   return (
-    <CheeseModel
-      position={position}
-      rotation={rotation}
-      scale={scaleVector}
-      centerOrigin
-    />
+    <group ref={cheeseRef} position={position} rotation={rotation}>
+      <CheeseModel
+        scale={scaleVector}
+        centerOrigin
+      />
+    </group>
   )
 }
 
 /**
- * 3D Cartoon Mouse seen from behind
+ * 3D Cartoon Mouse seen from behind with rich living idle animation
  */
 function MouseCharacter({ position = [-1.7, GROUND_Y + 0.24, 2.0] }) {
   const tailRef = useRef()
   const bodyRef = useRef()
+  const headRef = useRef()
+  const leftEarRef = useRef()
+  const rightEarRef = useRef()
+  const leftFootRef = useRef()
+  const rightFootRef = useRef()
 
   useFrame((state) => {
     const t = state.clock.elapsedTime
+
+    // Fluid multi-harmonic tail swish
     if (tailRef.current) {
-      tailRef.current.rotation.z = Math.sin(t * 3.5) * 0.14
+      tailRef.current.rotation.z = Math.sin(t * 3.2) * 0.28 + Math.cos(t * 1.6) * 0.12
+      tailRef.current.rotation.x = 0.45 + Math.sin(t * 4.0) * 0.08
     }
+
+    // Breathing squash & stretch and vertical bobbing
     if (bodyRef.current) {
-      bodyRef.current.position.y = Math.sin(t * 3.5) * 0.015
+      const breath = Math.sin(t * 2.4)
+      bodyRef.current.position.y = breath * 0.015
+      bodyRef.current.scale.set(
+        1 - breath * 0.02,
+        0.95 + breath * 0.03,
+        1.25 - breath * 0.02,
+      )
+    }
+
+    // Inquisitive head sniff and subtle side glance
+    if (headRef.current) {
+      headRef.current.rotation.y = Math.sin(t * 1.2) * 0.12
+      headRef.current.rotation.x = Math.sin(t * 4.8) * 0.03 - 0.02
+    }
+
+    // Cute ear twitches (occasional perky flick)
+    if (leftEarRef.current && rightEarRef.current) {
+      const twitch = Math.sin(t * 7.5)
+      const isFlick = Math.sin(t * 0.7) > 0.8
+      leftEarRef.current.rotation.z = -0.3 + (isFlick ? twitch * 0.12 : twitch * 0.03)
+      rightEarRef.current.rotation.z = 0.3 - (isFlick ? twitch * 0.08 : twitch * 0.03)
+    }
+
+    // Gentle foot tap
+    if (rightFootRef.current) {
+      rightFootRef.current.position.y = -0.22 + Math.max(0, Math.sin(t * 2.4)) * 0.015
     }
   })
 
@@ -152,13 +195,15 @@ function MouseCharacter({ position = [-1.7, GROUND_Y + 0.24, 2.0] }) {
         </mesh>
 
         {/* Head */}
-        <mesh position={[0, 0.32, -0.3]} scale={[0.85, 0.8, 0.9]} castShadow receiveShadow>
-          <sphereGeometry args={[0.3, 20, 18]} />
-          <meshStandardMaterial color="#68728a" roughness={0.5} />
-        </mesh>
+        <group ref={headRef}>
+          <mesh position={[0, 0.32, -0.3]} scale={[0.85, 0.8, 0.9]} castShadow receiveShadow>
+            <sphereGeometry args={[0.3, 20, 18]} />
+            <meshStandardMaterial color="#68728a" roughness={0.5} />
+          </mesh>
+        </group>
 
         {/* Left Ear - Facing back toward camera */}
-        <group position={[-0.32, 0.52, -0.15]} rotation={[-0.2, 0.2, -0.3]}>
+        <group ref={leftEarRef} position={[-0.32, 0.52, -0.15]} rotation={[-0.2, 0.2, -0.3]}>
           <mesh castShadow receiveShadow>
             <cylinderGeometry args={[0.26, 0.26, 0.035, 24]} />
             <meshStandardMaterial color="#68728a" roughness={0.5} />
@@ -170,7 +215,7 @@ function MouseCharacter({ position = [-1.7, GROUND_Y + 0.24, 2.0] }) {
         </group>
 
         {/* Right Ear - Facing back toward camera */}
-        <group position={[0.32, 0.52, -0.15]} rotation={[-0.2, -0.2, 0.3]}>
+        <group ref={rightEarRef} position={[0.32, 0.52, -0.15]} rotation={[-0.2, -0.2, 0.3]}>
           <mesh castShadow receiveShadow>
             <cylinderGeometry args={[0.26, 0.26, 0.035, 24]} />
             <meshStandardMaterial color="#68728a" roughness={0.5} />
@@ -182,13 +227,13 @@ function MouseCharacter({ position = [-1.7, GROUND_Y + 0.24, 2.0] }) {
         </group>
 
         {/* Left Foot */}
-        <mesh position={[-0.26, -0.22, 0.1]} rotation={[0, 0, 0.2]} castShadow>
+        <mesh ref={leftFootRef} position={[-0.26, -0.22, 0.1]} rotation={[0, 0, 0.2]} castShadow>
           <sphereGeometry args={[0.08, 12, 10]} />
           <meshStandardMaterial color="#ff9fb6" roughness={0.6} />
         </mesh>
 
         {/* Right Foot */}
-        <mesh position={[0.26, -0.22, 0.1]} rotation={[0, 0, -0.2]} castShadow>
+        <mesh ref={rightFootRef} position={[0.26, -0.22, 0.1]} rotation={[0, 0, -0.2]} castShadow>
           <sphereGeometry args={[0.08, 12, 10]} />
           <meshStandardMaterial color="#ff9fb6" roughness={0.6} />
         </mesh>
@@ -206,12 +251,22 @@ function MouseCharacter({ position = [-1.7, GROUND_Y + 0.24, 2.0] }) {
 }
 
 /**
- * Left Wooden Directional Signpost
+ * Left Wooden Directional Signpost with gentle wind sway
  */
 function SignPost() {
   const runTex = useSignTexture('Run')
   const dodgeTex = useSignTexture('Dodge')
   const collectTex = useSignTexture('Collect')
+  const p1Ref = useRef()
+  const p2Ref = useRef()
+  const p3Ref = useRef()
+
+  useFrame((state) => {
+    const t = state.clock.elapsedTime
+    if (p1Ref.current) p1Ref.current.rotation.z = 0.05 + Math.sin(t * 1.5) * 0.025
+    if (p2Ref.current) p2Ref.current.rotation.z = -0.03 + Math.sin(t * 1.5 + 1.2) * 0.03
+    if (p3Ref.current) p3Ref.current.rotation.z = 0.02 + Math.sin(t * 1.5 + 2.4) * 0.025
+  })
 
   return (
     <group position={[-3.3, GROUND_Y, 0.2]} rotation={[0, 0.4, 0]}>
@@ -222,19 +277,19 @@ function SignPost() {
       </mesh>
 
       {/* Plank 1: Run */}
-      <mesh position={[0.2, 2.05, 0.08]} rotation={[0, -0.04, 0.05]} castShadow>
+      <mesh ref={p1Ref} position={[0.2, 2.05, 0.08]} rotation={[0, -0.04, 0.05]} castShadow>
         <boxGeometry args={[1.4, 0.36, 0.08]} />
         <meshStandardMaterial map={runTex} roughness={0.7} />
       </mesh>
 
       {/* Plank 2: Dodge */}
-      <mesh position={[0.12, 1.55, 0.08]} rotation={[0, 0.06, -0.03]} castShadow>
+      <mesh ref={p2Ref} position={[0.12, 1.55, 0.08]} rotation={[0, 0.06, -0.03]} castShadow>
         <boxGeometry args={[1.55, 0.36, 0.08]} />
         <meshStandardMaterial map={dodgeTex} roughness={0.7} />
       </mesh>
 
       {/* Plank 3: Collect */}
-      <mesh position={[0.18, 1.05, 0.08]} rotation={[0, -0.05, 0.02]} castShadow>
+      <mesh ref={p3Ref} position={[0.18, 1.05, 0.08]} rotation={[0, -0.05, 0.02]} castShadow>
         <boxGeometry args={[1.5, 0.36, 0.08]} />
         <meshStandardMaterial map={collectTex} roughness={0.7} />
       </mesh>
@@ -243,16 +298,25 @@ function SignPost() {
 }
 
 /**
- * Street Lantern on Right Wall
+ * Street Lantern on Right Wall with subtle sway
  */
 function StreetLantern({ theme }) {
+  const lanternRef = useRef()
+
+  useFrame((state) => {
+    if (!lanternRef.current) return
+    const t = state.clock.elapsedTime
+    lanternRef.current.rotation.z = Math.sin(t * 1.2) * 0.015
+  })
+
   return (
-    <LampModel
-      theme={theme}
-      scale={0.075}
-      position={[2.85, GROUND_Y, -0.9]}
-      rotation={[0, Math.PI / 4, 0]}
-    />
+    <group ref={lanternRef} position={[2.85, GROUND_Y, -0.9]}>
+      <LampModel
+        theme={theme}
+        scale={0.075}
+        rotation={[0, Math.PI / 4, 0]}
+      />
+    </group>
   )
 }
 
@@ -303,10 +367,20 @@ function WoodenTrack() {
 }
 
 /**
- * Fluffy Clouds & Trees
+ * Fluffy Drifting Clouds & Trees
  */
 function Scenery({ theme }) {
   const isDay = theme === 'day'
+  const cloudsRef = useRef()
+
+  useFrame((_, delta) => {
+    if (cloudsRef.current) {
+      cloudsRef.current.position.x += delta * 0.45
+      if (cloudsRef.current.position.x > 32) {
+        cloudsRef.current.position.x = -32
+      }
+    }
+  })
 
   return (
     <group>
@@ -316,9 +390,9 @@ function Scenery({ theme }) {
         <meshBasicMaterial color={isDay ? '#71bcf8' : '#0a1024'} side={1} />
       </mesh>
 
-      {/* Fluffy Clouds */}
+      {/* Fluffy Clouds drifting */}
       {isDay && (
-        <group position={[0, 13, -25]}>
+        <group ref={cloudsRef} position={[0, 13, -25]}>
           <group position={[-7, 1.5, -5]}>
             <mesh><sphereGeometry args={[2.3, 12, 10]} /><meshBasicMaterial color="#ffffff" /></mesh>
             <mesh position={[1.7, -0.3, 0]}><sphereGeometry args={[1.6, 12, 10]} /><meshBasicMaterial color="#ffffff" /></mesh>
@@ -349,6 +423,26 @@ function Scenery({ theme }) {
 }
 
 /**
+ * Interactive Parallax & Breathing Camera Controller
+ */
+function MenuParallaxCamera() {
+  const { camera, pointer } = useThree()
+
+  useFrame((state, delta) => {
+    const t = state.clock.elapsedTime
+    const targetX = pointer.x * 0.35 + Math.sin(t * 0.6) * 0.05
+    const targetY = 2.05 + pointer.y * 0.2 + Math.cos(t * 0.8) * 0.04
+    // oxlint-disable-next-line react/immutability
+    camera.position.x = MathUtils.lerp(camera.position.x, targetX, Math.min(1, delta * 3))
+    // oxlint-disable-next-line react/immutability
+    camera.position.y = MathUtils.lerp(camera.position.y, targetY, Math.min(1, delta * 3))
+    camera.lookAt(0, 0.45, 0)
+  })
+
+  return null
+}
+
+/**
  * Interactive 3D Menu Scene in Three.js
  */
 export function ThreeMenuScene({ theme }) {
@@ -356,6 +450,8 @@ export function ThreeMenuScene({ theme }) {
 
   return (
     <>
+      <MenuParallaxCamera />
+
       {/* Lighting */}
       <ambientLight intensity={isDay ? 1.1 : 0.35} color={isDay ? '#fff8ec' : '#334166'} />
       <directionalLight
@@ -373,8 +469,8 @@ export function ThreeMenuScene({ theme }) {
       <StreetLantern theme={theme} />
 
       {/* Swiss Cheese Blocks around track matching reference layout */}
-      {/* 1. Large Foreground Right Cube */}
-      <SwissCheese position={[2.6, GROUND_Y + 0.48, 3.0]} rotation={[0, -0.28, 0]} scale={[1.35, 1.15, 1.35]} />
+      {/* 1. Large Foreground Right Cube with subtle idle hover */}
+      <SwissCheese position={[2.6, GROUND_Y + 0.48, 3.0]} rotation={[0, -0.28, 0]} scale={[1.35, 1.15, 1.35]} hover />
       {/* 2. Midground Left Cube */}
       <SwissCheese position={[-2.4, GROUND_Y + 0.34, -0.6]} rotation={[0, 0.35, 0]} scale={[0.75, 0.72, 0.75]} />
       {/* 3. Midground Right Cube near lantern */}

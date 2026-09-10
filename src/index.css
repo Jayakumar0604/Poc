@@ -26,6 +26,32 @@ button {
 }
 
 /* Custom 3D Pill & Action Buttons matching reference image */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(0.6deg);
+  }
+}
+
+.animate-float {
+  animation: float 3.6s ease-in-out infinite;
+}
+
+@keyframes pulse-play {
+  0%, 100% {
+    box-shadow: 0 4px 0 #b36306, 0 6px 14px rgba(255, 190, 56, 0.4);
+  }
+  50% {
+    box-shadow: 0 4px 0 #b36306, 0 8px 24px rgba(255, 190, 56, 0.75);
+  }
+}
+
+.btn-pulse-play {
+  animation: pulse-play 2.2s ease-in-out infinite;
+}
+
 .btn-3d-yellow {
   background: linear-gradient(180deg, #ffbe38 0%, #f69b17 100%);
   box-shadow: 0 4px 0 #b36306, 0 6px 12px rgba(0, 0, 0, 0.35);
