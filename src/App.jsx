@@ -4,6 +4,7 @@ import { EffectComposer, SSAO } from '@react-three/postprocessing'
 import { CanvasTexture, MathUtils, RepeatWrapping } from 'three'
 import MainMenu from './components/MainMenu'
 import ThreeMenuCanvas from './components/ThreeMenuScene'
+import CatModel from './components/CatModel'
 
 const KEY = 'endless-runner-high-score'
 const LANES = [-1.5, 0, 1.5]
@@ -386,7 +387,7 @@ function Cat({ catRef, playerRef, playerStats, active, isCaught }) {
     } else {
       const chase = playerStats.current.hits === 1
       const visible = chase || elapsed < 3
-      const targetZ = chase ? mouse.z + 1.5 : visible ? mouse.z + 3 : mouse.z + 15
+      const targetZ = chase ? mouse.z + 1.4 : visible ? mouse.z + 2.0 : mouse.z + 15
       cat.visible = visible
       cat.position.x = MathUtils.lerp(cat.position.x, mouse.x, 0.05)
       cat.position.z = MathUtils.lerp(cat.position.z, targetZ, 0.05)
@@ -397,45 +398,8 @@ function Cat({ catRef, playerRef, playerStats, active, isCaught }) {
   })
 
   return (
-    <group ref={catRef} position={[0, CAT_GROUND_Y, 3]} visible={active || isCaught}>
-      <mesh position={[0, 0.12, 0.15]} scale={[0.75, 0.7, 1.15]} castShadow receiveShadow>
-        <sphereGeometry args={[0.45, 6, 4]} />
-        <meshStandardMaterial color="#171923" flatShading />
-      </mesh>
-      <mesh position={[0, 0.42, -0.5]} castShadow receiveShadow>
-        <sphereGeometry args={[0.35, 6, 4]} />
-        <meshStandardMaterial color="#252936" flatShading />
-      </mesh>
-      <mesh position={[0, 0.34, -0.8]} castShadow>
-        <sphereGeometry args={[0.12, 6, 4]} />
-        <meshStandardMaterial color="#b8a9a0" flatShading />
-      </mesh>
-      <mesh position={[-0.1, 0.65, -0.5]} castShadow>
-        <coneGeometry args={[0.1, 0.25, 4]} />
-        <meshStandardMaterial color="#252936" flatShading />
-      </mesh>
-      <mesh position={[0.1, 0.65, -0.5]} castShadow>
-        <coneGeometry args={[0.1, 0.25, 4]} />
-        <meshStandardMaterial color="#252936" flatShading />
-      </mesh>
-      <mesh position={[-0.1, 0.47, -0.83]} rotation={[0, 0, -0.2]} castShadow>
-        <boxGeometry args={[0.08, 0.05, 0.05]} />
-        <meshStandardMaterial color="#aaff00" emissive="#aaff00" emissiveIntensity={2} flatShading />
-      </mesh>
-      <mesh position={[0.1, 0.47, -0.83]} rotation={[0, 0, 0.2]} castShadow>
-        <boxGeometry args={[0.08, 0.05, 0.05]} />
-        <meshStandardMaterial color="#aaff00" emissive="#aaff00" emissiveIntensity={2} flatShading />
-      </mesh>
-      <mesh position={[0, 0.18, 0.82]} rotation={[Math.PI / 2, 0, 0.15]} castShadow>
-        <cylinderGeometry args={[0.06, 0.1, 0.9, 5]} />
-        <meshStandardMaterial color="#171923" flatShading />
-      </mesh>
-      {[-0.22, 0.22].flatMap((x) => [-0.15, 0.45].map((z) => (
-        <mesh key={`${x}-${z}`} position={[x, -0.38, z]} castShadow receiveShadow>
-          <cylinderGeometry args={[0.08, 0.08, 0.35, 6]} />
-          <meshStandardMaterial color="#171923" flatShading />
-        </mesh>
-      )))}
+    <group ref={catRef} position={[0, CAT_GROUND_Y, 2.0]} visible={active || isCaught}>
+      <CatModel position={[0, -0.55, 0]} scale={0.0022} />
     </group>
   )
 }
@@ -1028,7 +992,7 @@ export default function App() {
     setIsCaught(false)
     setScore(0)
     setCoinCount(0)
-    setInvincibleTime(0)
+    setInvincibleTime(3)
     hits.current = 0
     setRun((value) => value + 1)
     setScreen('playing')
