@@ -10,6 +10,7 @@ import LampModel from './components/LampModel'
 import MousetrapModel from './components/MousetrapModel'
 import YarnModel from './components/YarnModel'
 import MilkModel, { MILK_MODEL_CENTER_OFFSET } from './components/MilkModel'
+import VacuumRobot from './components/VacuumRobot'
 import CheeseModel from './components/CheeseModel'
 import MagnetModel from './components/MagnetModel'
 import RocketModel from './components/RocketModel'
@@ -34,9 +35,9 @@ const CAT_GROUND_Y = GROUND_Y + 0.55
 const CHEESE_GROUND_Y = GROUND_Y + 0.3
 const CHEESE_AIRBORNE_Y = FLIGHT_Y + 0.1
 const OVERHEAD_TYPES = ['table', 'pencils']
-const MOVING_TYPES = ['milk', 'mousetrap', 'yarn', 'book']
+const MOVING_TYPES = ['mousetrap', 'yarn', 'vacuum', 'mousetrap', 'yarn', 'book']
 const MIN_OBJECT_GAP = 8
-const OBSTACLE_SPAWN_GAP = 7
+const OBSTACLE_SPAWN_GAP = 5.5
 const INITIAL_CHEESE_REQUESTS = 4
 const chooseSpawnType = () => {
   const rand = Math.random()
@@ -646,6 +647,10 @@ function MilkBowl({ position, obstacleRef }) {
   return <MilkModel position={position} obstacleRef={obstacleRef} />
 }
 
+function Vacuum({ position, obstacleRef }) {
+  return <VacuumRobot position={position} obstacleRef={obstacleRef} />
+}
+
 function RocketPickup({ position, obstacleRef, onCollect, highQuality }) {
   return (
     <RocketModel
@@ -678,7 +683,6 @@ function MagnetPickup({ position, obstacleRef }) {
 
 function Obstacle({ type, position, obstacleRef, onRocket, highQuality }) {
   const materials = useMemo(() => ({
-    milk: '#fff7e6',
     mousetrap: '#d64545',
     table: '#b7794b',
     pencil: '#ffd43b',
@@ -688,6 +692,7 @@ function Obstacle({ type, position, obstacleRef, onRocket, highQuality }) {
   if (type === 'empty') return null
   if (type === 'yarn') return <Yarn position={position} obstacleRef={obstacleRef} />
   if (type === 'milkBowl') return <MilkBowl position={position} obstacleRef={obstacleRef} />
+  if (type === 'vacuum') return <Vacuum position={position} obstacleRef={obstacleRef} />
   if (type === 'rocket') return <RocketPickup position={position} obstacleRef={obstacleRef} onCollect={onRocket} highQuality={highQuality} />
   if (type === 'magnet') return <MagnetPickup position={position} obstacleRef={obstacleRef} />
 
@@ -709,15 +714,6 @@ function Obstacle({ type, position, obstacleRef, onRocket, highQuality }) {
   }
 
   if (type === 'book') return <BookObstacle position={position} obstacleRef={obstacleRef} />
-
-  if (type === 'milk') {
-    return (
-      <mesh ref={obstacleRef} position={[position[0], position[1] + 0.02, position[2]]} rotation={[-Math.PI / 2, 0, 0]} castShadow receiveShadow>
-        <planeGeometry args={[1.5, 1.2]} />
-        <meshStandardMaterial color={materials.milk} flatShading />
-      </mesh>
-    )
-  }
 
   if (type === 'mousetrap') {
     return (
@@ -749,7 +745,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
       if (i === 1) return { type: 'magnet', x: LANES[1], z: -24 }
       if (i === 4) return { type: 'rocket', x: LANES[2], z: -60 }
       const type = i % 2 ? OVERHEAD_TYPES[i % OVERHEAD_TYPES.length] : MOVING_TYPES[i % MOVING_TYPES.length]
-      return { type, x: LANES[i % 3], z: -10 - i * 9 }
+      return { type, x: LANES[i % 3], z: -10 - i * 7 }
     }),
     [],
   )
@@ -773,6 +769,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
         ) z -= OBSTACLE_SPAWN_GAP
         item.z = z
         item.x = randomLane()
+        item.vacuumDirection = Math.random() > 0.5 ? 1 : -1
         const type = chooseSpawnType()
         if (type === 'cheese') {
           item.type = 'empty'
@@ -793,13 +790,22 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
         ? GROUND_Y + 0.5
         : item.type === 'milkBowl'
           ? GROUND_Y + MILK_MODEL_CENTER_OFFSET
-          : item.type === 'milk'
-            ? GROUND_Y + 0.02
-            : item.type === 'magnet'
+          : item.type === 'magnet'
               ? GROUND_Y + 0.35
               : item.type === 'book'
                 ? GROUND_Y + BOOK_MODEL_CENTER_OFFSET
                 : GROUND_Y
+      if (item.type === 'vacuum') {
+        item.vacuumDirection = item.vacuumDirection || 1
+        item.x += item.vacuumDirection * delta * 3.2
+        if (item.x >= LANES[2]) {
+          item.x = LANES[2]
+          item.vacuumDirection = -1
+        } else if (item.x <= LANES[0]) {
+          item.x = LANES[0]
+          item.vacuumDirection = 1
+        }
+      }
       if (mesh) mesh.position.set(item.x, y, item.z)
     })
   })
@@ -1218,7 +1224,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       const hitX = Math.abs(px - ox) < 0.4
       const hitZ = Math.abs(pz - oz) < 0.4
       const pickupHit = Math.abs(px - ox) < 0.75 && Math.abs(pz - oz) < 0.85
-      if (obstacle.type === 'milk' && pickupHit) {
+      if (obstacle.type === 'milkBowl' && pickupHit) {
         particleEmitter.emitPowerupPickup(player.current.position.x, player.current.position.y + 0.3, player.current.position.z, 'milk')
         playerStats.current.invincibleUntil = state.clock.elapsedTime + 5
         obstacle.z = 2
@@ -1239,7 +1245,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       }
       if (flightModeRef.current || rocketActive) continue
       if (invincibleTime > 0 || playerStats.current.invincibleUntil > state.clock.elapsedTime) continue
-      const hitJumpObject = ['milk', 'mousetrap', 'book', 'yarn'].includes(obstacle.type) && player.current.position.y < 0.5
+      const hitJumpObject = ['mousetrap', 'book', 'yarn', 'vacuum'].includes(obstacle.type) && player.current.position.y < 0.5
       const hitOverhead = OVERHEAD_TYPES.includes(obstacle.type) && player.current.scale.y > 0.6
       const collision = hitX && hitZ && (hitJumpObject || hitOverhead)
 
@@ -1470,7 +1476,7 @@ export default function App() {
     setScore(0)
     setCoinCount(0)
     setFps(0)
-    setInvincibleTime(3)
+    setInvincibleTime(0)
     setMagnetTime(0)
     setRocketTime(0)
     hits.current = 0
