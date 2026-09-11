@@ -1,11 +1,19 @@
-Add a Rocket power-up feature to the player mechanics.
+Implement a 'Graphics Quality' toggle (High/Low) in the game's UI to optimize performance and fix lag issues. Create a settings menu with this toggle and bind it to a graphics manager function.
 
-Trigger: When the player collects or clicks the Rocket item, activate 'Flight Mode'.
+When Toggle is ON (High Quality):
 
-Movement: Interpolate the player's Y-position to a fixed height above the obstacles. Lock the Y-axis so the player stays in the air, but allow normal Left/Right lane movement.
+Lighting: Enable HemisphereLight and DirectionalLight with castShadow = true. Use PCFSoftShadowMap for realistic shadows. Enable dynamic PointLights on wall lamps.
 
-Physics/Collision: Temporarily disable gravity and ignore collisions with ground-level obstacles.
+Particles & VFX: Enable high-density volumetric particle systems for the Rocket/Flight mode fire effect and collectible effects.
 
-Effects: Attach a thrust/particle flame effect to the player.
+Spawning: Maintain high-density object spawning.
 
-Cooldown/Reset: Set a timer for 5 seconds. Once the timer ends, smoothly interpolate the player's Y-position back to the ground level, re-enable gravity, and restore normal collision logic.
+When Toggle is OFF (Performance/Low Quality):
+
+Lighting: Disable all dynamic PointLights. Turn off all shadow casting and receiving (castShadow = false, receiveShadow = false). Use only basic AmbientLight and a simple DirectionalLight without shadows.
+
+Particles & VFX: Completely disable the fire particle emitters and replace them with a simple, static low-poly mesh (e.g., a simple cone) for the rocket exhaust. Disable all floating particle visual effects.
+
+Renderer: Lower the pixelRatio slightly if necessary to prioritize maintaining a stable 60 FPS.
+
+Ensure the toggle immediately updates the scene renderer, lighting, and particle systems without needing to restart the game.
