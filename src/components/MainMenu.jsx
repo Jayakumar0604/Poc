@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import CheeseChaseLogo3D from './CheeseChaseLogo3D'
 
 const DIFFICULTIES = {
   Easy: { baseSpeed: 3, maxSpeed: 12 },
@@ -93,14 +94,9 @@ export default function MainMenu({ theme, showFps, onTheme, onToggleFps, onStart
 
   return (
     <div className="font-cartoon flex flex-col items-center select-none w-full max-w-[340px] sm:max-w-[355px]">
-      {/* 3D Cheese Chase Logo with radiant Cheese Wedge */}
-      <div className="relative -mb-3 z-10 select-none pointer-events-none animate-float">
-        <img
-          src="/logo-transparent.png"
-          alt="Cheese Chase"
-          className="w-[280px] sm:w-[305px] drop-shadow-[0_8px_16px_rgba(0,0,0,0.4)] object-contain"
-          draggable="false"
-        />
+      {/* 3D Cheese Chase Logo with radiant Cheese Wedge in Three.js WebGL */}
+      <div className="relative -mb-6 z-10 select-none w-[320px] sm:w-[345px] h-[180px] sm:h-[195px] drop-shadow-[0_12px_24px_rgba(0,0,0,0.5)]">
+        <CheeseChaseLogo3D />
       </div>
 
       {/* Main Menu Dark Brown Card */}
