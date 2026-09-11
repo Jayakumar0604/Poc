@@ -394,7 +394,7 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false }) {
       </mesh>
       {magnetActive && (
         <group position={[0, 0.46, -0.05]}>
-          <MagnetModel scale={0.55} hasAura={false} />
+          <MagnetModel scale={0.18} hasAura={false} />
           <mesh rotation={[-Math.PI / 2, 0, 0]}>
             <ringGeometry args={[0.32, 0.44, 24]} />
             <meshBasicMaterial color="#38bdf8" transparent opacity={0.65} />
@@ -497,7 +497,7 @@ function MagnetPickup({ position, obstacleRef }) {
   return (
     <group ref={obstacleRef} position={position}>
       <group ref={spinRef}>
-        <MagnetModel scale={1.2} />
+        <MagnetModel scale={0.28} />
       </group>
     </group>
   )
