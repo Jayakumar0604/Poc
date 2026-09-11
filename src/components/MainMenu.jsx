@@ -75,11 +75,13 @@ function GearIcon() {
  * @param {(theme: string) => void} props.onTheme
  * @param {boolean} props.showFps
  * @param {() => void} props.onToggleFps
+ * @param {'high'|'low'} props.graphicsQuality
+ * @param {() => void} props.onToggleGraphicsQuality
  * @param {(settings: { baseSpeed: number, maxSpeed: number, difficulty: string }) => void} props.onStart
  * @param {() => void} props.onHighScore
  * @param {() => void} props.onExit
  */
-export default function MainMenu({ theme, showFps, onTheme, onToggleFps, onStart, onHighScore, onExit }) {
+export default function MainMenu({ theme, showFps, onTheme, onToggleFps, graphicsQuality = 'high', onToggleGraphicsQuality, onStart, onHighScore, onExit }) {
   const [difficulty, setDifficulty] = useState('Easy')
   const [speed, setSpeed] = useState(DIFFICULTIES.Easy.baseSpeed)
   const profile = DIFFICULTIES[difficulty]
@@ -96,7 +98,7 @@ export default function MainMenu({ theme, showFps, onTheme, onToggleFps, onStart
     <div className="font-cartoon flex flex-col items-center select-none w-full max-w-[340px] sm:max-w-[355px]">
       {/* 3D Cheese Chase Logo with radiant Cheese Wedge in Three.js WebGL */}
       <div className="relative -mb-6 z-10 select-none w-[320px] sm:w-[345px] h-[180px] sm:h-[195px] drop-shadow-[0_12px_24px_rgba(0,0,0,0.5)]">
-        <CheeseChaseLogo3D />
+        <CheeseChaseLogo3D graphicsQuality={graphicsQuality} />
       </div>
 
       {/* Main Menu Dark Brown Card */}
@@ -153,6 +155,24 @@ export default function MainMenu({ theme, showFps, onTheme, onToggleFps, onStart
           >
             <span>FPS Counter</span>
             <span className="text-[10px] uppercase tracking-wider">{showFps ? 'On' : 'Off'}</span>
+          </button>
+        </div>
+
+        {/* Graphics Quality */}
+        <div className="mb-3.5">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-[#a88a75] mb-1.5">
+            Graphics Quality
+          </span>
+          <button
+            type="button"
+            onClick={onToggleGraphicsQuality}
+            aria-pressed={graphicsQuality === 'high'}
+            className={`w-full flex items-center justify-between py-1.5 px-3 rounded-xl font-bold text-[12.5px] tracking-wide transition-all ${
+              graphicsQuality === 'high' ? 'btn-3d-green' : 'btn-3d-dark'
+            }`}
+          >
+            <span>{graphicsQuality === 'high' ? 'High Quality' : 'Performance'}</span>
+            <span className="text-[10px] uppercase tracking-wider">{graphicsQuality === 'high' ? 'High' : 'Low'}</span>
           </button>
         </div>
 

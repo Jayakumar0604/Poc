@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { CanvasTexture, MathUtils, RepeatWrapping } from 'three'
 import LampModel from './LampModel'
 import CheeseModel from './CheeseModel'
+import GraphicsQualityManager from './GraphicsQualityManager'
 
 const GROUND_Y = -0.6
 
@@ -300,7 +301,7 @@ function SignPost() {
 /**
  * Street Lantern on Right Wall with subtle sway
  */
-function StreetLantern({ theme }) {
+function StreetLantern({ theme, highQuality }) {
   const lanternRef = useRef()
 
   useFrame((state) => {
@@ -315,6 +316,7 @@ function StreetLantern({ theme }) {
         theme={theme}
         scale={0.075}
         rotation={[0, Math.PI / 4, 0]}
+        withLight={highQuality}
       />
     </group>
   )
@@ -445,12 +447,13 @@ function MenuParallaxCamera() {
 /**
  * Interactive 3D Menu Scene in Three.js
  */
-export function ThreeMenuScene({ theme }) {
+export function ThreeMenuScene({ theme, graphicsQuality = 'high' }) {
   const isDay = theme === 'day'
 
   return (
     <>
       <MenuParallaxCamera />
+      <GraphicsQualityManager quality={graphicsQuality} />
 
       {/* Lighting */}
       <ambientLight intensity={isDay ? 1.1 : 0.35} color={isDay ? '#fff8ec' : '#334166'} />
@@ -466,7 +469,7 @@ export function ThreeMenuScene({ theme }) {
       <Scenery theme={theme} />
       <WoodenTrack />
       <SignPost />
-      <StreetLantern theme={theme} />
+      <StreetLantern theme={theme} highQuality={graphicsQuality === 'high'} />
 
       {/* Swiss Cheese Blocks around track matching reference layout */}
       {/* 1. Large Foreground Right Cube with subtle idle hover */}
@@ -484,16 +487,16 @@ export function ThreeMenuScene({ theme }) {
   )
 }
 
-export default function ThreeMenuCanvas({ theme, children }) {
+export default function ThreeMenuCanvas({ theme, graphicsQuality = 'high', children }) {
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#26150e]">
       <Canvas
-        shadows
-        dpr={[1, 1.5]}
+        shadows={graphicsQuality === 'high'}
+        dpr={graphicsQuality === 'high' ? [1, 1.5] : [1, 1]}
         camera={{ position: [0, 2.05, 5.4], fov: 47 }}
         className="w-full h-full"
       >
-        <ThreeMenuScene theme={theme} />
+        <ThreeMenuScene theme={theme} graphicsQuality={graphicsQuality} />
       </Canvas>
       {children}
     </div>

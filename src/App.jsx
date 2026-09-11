@@ -4,6 +4,7 @@ import { EffectComposer, SSAO } from '@react-three/postprocessing'
 import { CanvasTexture, MathUtils, RepeatWrapping } from 'three'
 import MainMenu from './components/MainMenu'
 import ThreeMenuCanvas from './components/ThreeMenuScene'
+import GraphicsQualityManager from './components/GraphicsQualityManager'
 import CatModel from './components/CatModel'
 import LampModel from './components/LampModel'
 import MousetrapModel from './components/MousetrapModel'
@@ -21,6 +22,7 @@ import WindSpeedOverlay from './components/WindSpeedOverlay'
 
 const KEY = 'endless-runner-high-score'
 const FPS_KEY = 'show-fps-counter'
+const GRAPHICS_QUALITY_KEY = 'graphics-quality'
 const LANE_STEP = 2.4
 const LANES = [-LANE_STEP, 0, LANE_STEP]
 const randomLane = () => LANES[Math.floor(Math.random() * LANES.length)]
@@ -50,6 +52,7 @@ const DIFFICULTIES = {
 }
 const readBest = () => Number(localStorage.getItem(KEY)) || 0
 const readFpsPreference = () => localStorage.getItem(FPS_KEY) !== 'false'
+const readGraphicsQuality = () => localStorage.getItem(GRAPHICS_QUALITY_KEY) === 'low' ? 'low' : 'high'
 const coinFits = (z, lane, obstacles, positions) => (
   obstacles.every((obstacle) => (
     Math.abs(obstacle.x - lane) >= 0.9 || Math.abs(obstacle.z - z) >= MIN_OBJECT_GAP
@@ -84,30 +87,48 @@ function Camera({ isCaught, cinematic, flightActive = false }) {
   return null
 }
 
-function Lighting({ theme }) {
+function Lighting({ theme, highQuality }) {
   const day = theme === 'day'
   return (
     <>
       <color attach="background" args={[day ? '#87CEEB' : '#0B0C10']} />
       <fog attach="fog" args={[day ? '#87CEEB' : '#0B0C10', 15, 60]} />
-      <ambientLight intensity={day ? 0.95 : 0.35} color={day ? '#fff1d0' : '#443022'} />
-      <directionalLight
-        position={day ? [10, 20, 10] : [5, 10, 5]}
-        intensity={day ? 1.5 : 0.7}
-        color={day ? '#ffd39a' : '#d98b5f'}
-        castShadow
-        shadow-radius={4}
-      />
+      {highQuality ? (
+        <>
+          <hemisphereLight
+            skyColor={day ? '#dff4ff' : '#24345f'}
+            groundColor={day ? '#8b5a3c' : '#120d16'}
+            intensity={day ? 0.8 : 0.45}
+          />
+          <directionalLight
+            position={day ? [10, 20, 10] : [5, 10, 5]}
+            intensity={day ? 1.5 : 0.7}
+            color={day ? '#ffd39a' : '#d98b5f'}
+            castShadow
+            shadow-radius={4}
+          />
+        </>
+      ) : (
+        <>
+          <ambientLight intensity={day ? 0.8 : 0.3} color={day ? '#fff1d0' : '#443022'} />
+          <directionalLight
+            position={[4, 8, 4]}
+            intensity={day ? 0.85 : 0.45}
+            color={day ? '#fff0d0' : '#c28a72'}
+          />
+        </>
+      )}
     </>
   )
 }
 
-function TableLamp({ theme }) {
+function TableLamp({ theme, highQuality }) {
   return (
     <LampModel
       theme={theme}
       scale={0.065}
       position={[0, 0, 0]}
+      withLight={highQuality}
     />
   )
 }
@@ -155,7 +176,7 @@ function LowPolyTree() {
   )
 }
 
-function SideScenery({ active, speedRef, theme }) {
+function SideScenery({ active, speedRef, theme, highQuality }) {
   const lights = useMemo(
     () => Array.from({ length: 8 }, (_, i) => ({ x: i % 2 ? -3.5 : 3.5, z: -i * 10 - 8 })),
     [],
@@ -216,7 +237,7 @@ function SideScenery({ active, speedRef, theme }) {
       )))}
       {lights.map((light, index) => (
         <group key={`lamp-${index}`} ref={(node) => (lampRefs.current[index] = node)} position={[light.x, GROUND_Y, light.z]}>
-          <TableLamp theme={theme} />
+          <TableLamp theme={theme} highQuality={highQuality} />
         </group>
       ))}
       {trees.map((tree, index) => (
@@ -267,7 +288,7 @@ function MenuDecor() {
   )
 }
 
-function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActive = false, flightModeRef }) {
+function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActive = false, flightModeRef, highQuality }) {
   const mouseRef = useRef()
   const tailRef = useRef()
   const velocity = useRef(0)
@@ -512,11 +533,13 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActiv
       {magnetActive && (
         <group position={[0, 0.46, -0.05]}>
           <MagnetModel scale={0.18} hasAura={false} />
-          <mesh rotation={[-Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[0.32, 0.44, 24]} />
-            <meshBasicMaterial color="#38bdf8" transparent opacity={0.65} />
-          </mesh>
-          <MagnetFluxParticles />
+          {highQuality && (
+            <mesh rotation={[-Math.PI / 2, 0, 0]}>
+              <ringGeometry args={[0.32, 0.44, 24]} />
+              <meshBasicMaterial color="#38bdf8" transparent opacity={0.65} />
+            </mesh>
+          )}
+          {highQuality && <MagnetFluxParticles />}
         </group>
       )}
       {rocketActive && (
@@ -525,18 +548,20 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActiv
             <coneGeometry args={[0.14, 0.46, 8]} />
             <meshStandardMaterial color="#ff6b1a" emissive="#ff3200" emissiveIntensity={2.2} />
           </mesh>
-          <mesh position={[0, -0.03, 0]}>
-            <coneGeometry args={[0.07, 0.3, 8]} />
-            <meshStandardMaterial color="#ffe066" emissive="#ff9f00" emissiveIntensity={2.8} />
-          </mesh>
-          <RocketThrust />
+          {highQuality && (
+            <mesh position={[0, -0.03, 0]}>
+              <coneGeometry args={[0.07, 0.3, 8]} />
+              <meshStandardMaterial color="#ffe066" emissive="#ff9f00" emissiveIntensity={2.8} />
+            </mesh>
+          )}
+          {highQuality && <RocketThrust highQuality />}
         </group>
       )}
     </group>
   )
 }
 
-function Cat({ catRef, playerRef, playerStats, active, isCaught }) {
+function Cat({ catRef, playerRef, playerStats, active, isCaught, highQuality }) {
   const startTime = useRef(null)
   const lastGallop = useRef(0)
   const chaseActive = useRef(false)
@@ -598,7 +623,7 @@ function Cat({ catRef, playerRef, playerStats, active, isCaught }) {
   return (
     <group ref={catRef} position={[0, CAT_GROUND_Y, 1.1]} visible={active || isCaught}>
       <CatModel position={[0, -0.55, 0]} scale={0.0022} rotation={[0, 0, 0]} />
-      <CatChaseAura playerStats={playerStats} />
+      {highQuality && <CatChaseAura playerStats={playerStats} />}
     </group>
   )
 }
@@ -611,12 +636,13 @@ function MilkBowl({ position, obstacleRef }) {
   return <MilkModel position={position} obstacleRef={obstacleRef} />
 }
 
-function RocketPickup({ position, obstacleRef, onCollect }) {
+function RocketPickup({ position, obstacleRef, onCollect, highQuality }) {
   return (
     <RocketModel
       position={position}
       obstacleRef={obstacleRef}
       onCollect={onCollect}
+      highQuality={highQuality}
     />
   )
 }
@@ -640,7 +666,7 @@ function MagnetPickup({ position, obstacleRef }) {
   )
 }
 
-function Obstacle({ type, position, obstacleRef, onRocket }) {
+function Obstacle({ type, position, obstacleRef, onRocket, highQuality }) {
   const materials = useMemo(() => ({
     milk: '#fff7e6',
     mousetrap: '#d64545',
@@ -652,7 +678,7 @@ function Obstacle({ type, position, obstacleRef, onRocket }) {
   if (type === 'empty') return null
   if (type === 'yarn') return <Yarn position={position} obstacleRef={obstacleRef} />
   if (type === 'milkBowl') return <MilkBowl position={position} obstacleRef={obstacleRef} />
-  if (type === 'rocket') return <RocketPickup position={position} obstacleRef={obstacleRef} onCollect={onRocket} />
+  if (type === 'rocket') return <RocketPickup position={position} obstacleRef={obstacleRef} onCollect={onRocket} highQuality={highQuality} />
   if (type === 'magnet') return <MagnetPickup position={position} obstacleRef={obstacleRef} />
 
   if (type === 'pencils') {
@@ -707,7 +733,7 @@ function Obstacle({ type, position, obstacleRef, onRocket }) {
   )
 }
 
-function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, cheeseRequests, onRocket }) {
+function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, cheeseRequests, onRocket, highQuality }) {
   const items = useMemo(
     () => Array.from({ length: 9 }, (_, i) => {
       if (i === 1) return { type: 'magnet', x: LANES[1], z: -24 }
@@ -775,6 +801,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
       position={[item.x, GROUND_Y, item.z]}
       obstacleRef={(mesh) => (refs.current[index] = mesh)}
       onRocket={onRocket}
+      highQuality={highQuality}
     />
   ))
 }
@@ -1110,7 +1137,7 @@ function Environment({ active, speedRef }) {
   )
 }
 
-function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseSpeed, maxSpeed, invincibleTime, magnetActive, rocketActive, showFps, onFps, onScore, onCaught, onMilk, onMagnet, onRocket, onCoin }) {
+function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseSpeed, maxSpeed, invincibleTime, magnetActive, rocketActive, highQuality, showFps, onFps, onScore, onCaught, onMilk, onMagnet, onRocket, onCoin }) {
   const player = useRef()
   const cat = useRef()
   const obstacles = useRef([])
@@ -1123,6 +1150,10 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
   const coinPositions = useRef(new Map())
   const cheeseRequests = useRef(INITIAL_CHEESE_REQUESTS)
   const flightModeRef = useRef(false)
+
+  useEffect(() => {
+    particleEmitter.setEnabled(highQuality)
+  }, [highQuality])
 
   useFrame((state, delta) => {
     if (showFps) {
@@ -1190,14 +1221,15 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
   return (
     <>
       <Camera isCaught={isCaught} cinematic={cinematic} flightActive={rocketActive} />
-      <Lighting theme={theme} />
+      <GraphicsQualityManager quality={highQuality ? 'high' : 'low'} />
+      <Lighting theme={theme} highQuality={highQuality} />
       <SkyEnvironment active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
-      <SideScenery active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
+      <SideScenery active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} highQuality={highQuality} />
       <Environment active={active && !isPaused && !isCaught} speedRef={currentSpeed} />
       {cinematic && <MenuDecor />}
-      <AtmosphericParticles active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
-      <ParticleEffects active={active && !isPaused} />
-      <FlightSpeedStreaks active={rocketActive} />
+      <AtmosphericParticles active={highQuality && active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
+      <ParticleEffects active={highQuality && active && !isPaused} />
+      <FlightSpeedStreaks active={highQuality && rocketActive} />
       <Mouse
         playerRef={player}
         active={active && !isPaused && !isCaught}
@@ -1205,8 +1237,9 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         magnetActive={magnetActive}
         rocketActive={rocketActive}
         flightModeRef={flightModeRef}
+        highQuality={highQuality}
       />
-      <Cat catRef={cat} playerRef={player} playerStats={playerStats} active={active && !isPaused} isCaught={isCaught} />
+      <Cat catRef={cat} playerRef={player} playerStats={playerStats} active={active && !isPaused} isCaught={isCaught} highQuality={highQuality} />
       <Obstacles
         active={active && !isPaused}
         obstaclesRef={obstacles}
@@ -1215,6 +1248,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         coinPositions={coinPositions}
         cheeseRequests={cheeseRequests}
         onRocket={onRocket}
+        highQuality={highQuality}
       />
       <CoinSpawner
         active={active && !isPaused && !isCaught}
@@ -1254,7 +1288,7 @@ function HighScore({ score, onBack }) {
   )
 }
 
-function UIOverlay({ score, coinCount, fps, showFps, invincibleTime, magnetTime, rocketTime, isPaused, gameOver, onRestart, onMenu, onResume }) {
+function UIOverlay({ score, coinCount, fps, showFps, graphicsQuality, onToggleGraphicsQuality, invincibleTime, magnetTime, rocketTime, isPaused, gameOver, onRestart, onMenu, onResume }) {
   return (
     <div className="font-cartoon pointer-events-none absolute inset-0 select-none">
       <WindSpeedOverlay active={rocketTime > 0} />
@@ -1266,6 +1300,14 @@ function UIOverlay({ score, coinCount, fps, showFps, invincibleTime, magnetTime,
         <span className="font-black text-[#ffbd38]">🧀 {coinCount}</span>
       </div>
       {showFps && <div className="absolute left-5 top-[4.5rem] rounded-xl border border-[#86efac]/30 bg-[#321c13]/85 px-3 py-1.5 text-xs font-black text-[#86efac] shadow-lg backdrop-blur-sm">{fps} FPS</div>}
+      <button
+        type="button"
+        onClick={onToggleGraphicsQuality}
+        className="pointer-events-auto absolute left-5 top-[7.5rem] rounded-xl border border-[#fed23a]/30 bg-[#321c13]/85 px-3 py-1.5 text-xs font-black text-[#fed23a] shadow-lg"
+        aria-label="Toggle graphics quality"
+      >
+        Graphics: {graphicsQuality === 'high' ? 'High' : 'Low'}
+      </button>
       
       {/* Active Power-up Badges */}
       <div className="absolute top-24 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2.5 pointer-events-none">
@@ -1345,6 +1387,7 @@ export default function App() {
   const [coinCount, setCoinCount] = useState(0)
   const [fps, setFps] = useState(0)
   const [showFps, setShowFps] = useState(() => readFpsPreference())
+  const [graphicsQuality, setGraphicsQuality] = useState(() => readGraphicsQuality())
   const [invincibleTime, setInvincibleTime] = useState(0)
   const [magnetTime, setMagnetTime] = useState(0)
   const [rocketTime, setRocketTime] = useState(0)
@@ -1366,6 +1409,14 @@ export default function App() {
     window.addEventListener('keydown', togglePause)
     return () => window.removeEventListener('keydown', togglePause)
   }, [screen])
+
+  const toggleGraphicsQuality = () => {
+    setGraphicsQuality((quality) => {
+      const nextQuality = quality === 'high' ? 'low' : 'high'
+      localStorage.setItem(GRAPHICS_QUALITY_KEY, nextQuality)
+      return nextQuality
+    })
+  }
 
   const toggleFps = () => {
     setShowFps((value) => {
@@ -1435,7 +1486,7 @@ export default function App() {
 
   if (screen === 'menu') {
     return (
-      <ThreeMenuCanvas theme={theme}>
+      <ThreeMenuCanvas theme={theme} graphicsQuality={graphicsQuality}>
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-4">
           <div className="pointer-events-auto">
             <MainMenu
@@ -1443,6 +1494,8 @@ export default function App() {
               onTheme={setTheme}
               showFps={showFps}
               onToggleFps={toggleFps}
+              graphicsQuality={graphicsQuality}
+              onToggleGraphicsQuality={toggleGraphicsQuality}
               onStart={start}
               onHighScore={() => {
                 setBest(readBest())
@@ -1480,7 +1533,7 @@ export default function App() {
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-[#3b2117]">
-      <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 3.5, 7], fov: 55 }}>
+      <Canvas shadows={graphicsQuality === 'high'} dpr={graphicsQuality === 'high' ? [1, 1.5] : [1, 1]} camera={{ position: [0, 3.5, 7], fov: 55 }}>
         <GameScene
           key={run}
           active={screen === 'playing'}
@@ -1493,6 +1546,7 @@ export default function App() {
           invincibleTime={invincibleTime}
           magnetActive={magnetTime > 0}
           rocketActive={rocketTime > 0}
+          highQuality={graphicsQuality === 'high'}
           showFps={showFps}
           onFps={setFps}
           onScore={setScore}
@@ -1502,15 +1556,19 @@ export default function App() {
           onRocket={() => setRocketTime(10)}
           onCaught={caught}
         />
-        <EffectComposer multisampling={0} enableNormalPass>
-          <SSAO radius={0.25} intensity={1.2} luminanceInfluence={0.7} samples={16} />
-        </EffectComposer>
+        {graphicsQuality === 'high' && (
+          <EffectComposer multisampling={0} enableNormalPass>
+            <SSAO radius={0.25} intensity={1.2} luminanceInfluence={0.7} samples={16} />
+          </EffectComposer>
+        )}
       </Canvas>
       <UIOverlay
         score={score}
         coinCount={coinCount}
         fps={fps}
         showFps={showFps}
+        graphicsQuality={graphicsQuality}
+        onToggleGraphicsQuality={toggleGraphicsQuality}
         invincibleTime={invincibleTime}
         magnetTime={magnetTime}
         rocketTime={rocketTime}

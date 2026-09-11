@@ -41,6 +41,8 @@ export default function ParticleEffects({ active = true }) {
     updateParticleSystem(dt, sparklesMeshRef.current, dustMeshRef.current, debrisMeshRef.current)
   })
 
+  if (!active) return null
+
   return (
     <group>
       <instancedMesh

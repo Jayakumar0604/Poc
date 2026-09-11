@@ -43,6 +43,7 @@ const debrisPool = createParticlePool(DEBRIS_POOL_SIZE)
 let sparkleIdx = 0
 let dustIdx = 0
 let debrisIdx = 0
+let particlesEnabled = true
 
 function spawnSparkle(x, y, z, vx, vy, vz, colorHex, size, maxLife, gravity = 7.0, drag = 0.95) {
   const p = sparklesPool[sparkleIdx]
@@ -126,7 +127,12 @@ function spawnDebris(x, y, z, vx, vy, vz, colorHex, size, maxLife, gravity = 9.8
  * Global particle emitter singleton for zero-re-render triggers from any component, hook, or useFrame
  */
 export const particleEmitter = {
+  setEnabled(enabled) {
+    particlesEnabled = enabled
+  },
+
   emitCheeseBurst(x, y, z, isSuper = false) {
+    if (!particlesEnabled) return
     const count = isSuper ? 32 : 20
     const palette = isSuper
       ? ['#ffd700', '#ffaa00', '#ff6080', '#00f0ff', '#ffffff']
@@ -164,6 +170,7 @@ export const particleEmitter = {
   },
 
   emitImpactBurst(x, y, z, obstacleType) {
+    if (!particlesEnabled) return
     if (obstacleType === 'mousetrap') {
       // Sharp metallic sparks
       for (let i = 0; i < 18; i++) {
@@ -312,6 +319,7 @@ export const particleEmitter = {
   },
 
   emitPowerupPickup(x, y, z, type) {
+    if (!particlesEnabled) return
     const count = 26
     let color = '#38bdf8'
     if (type === 'rocket') color = '#ff5722'
@@ -337,6 +345,7 @@ export const particleEmitter = {
   },
 
   emitDustPuff(x, y, z, scale = 1, count = 3, color = '#d8c2a3') {
+    if (!particlesEnabled) return
     for (let i = 0; i < count; i++) {
       spawnDust(
         x + (Math.random() - 0.5) * 0.12 * scale,
@@ -355,6 +364,7 @@ export const particleEmitter = {
   },
 
   emitLandShockwave(x, y, z) {
+    if (!particlesEnabled) return
     const count = 12
     for (let i = 0; i < count; i++) {
       const theta = (i / count) * Math.PI * 2
@@ -376,6 +386,7 @@ export const particleEmitter = {
   },
 
   emitMagnetTrail(x, y, z) {
+    if (!particlesEnabled) return
     spawnSparkle(
       x + (Math.random() - 0.5) * 0.1,
       y + (Math.random() - 0.5) * 0.1,

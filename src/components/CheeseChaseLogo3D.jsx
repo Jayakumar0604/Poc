@@ -4,6 +4,7 @@ import { MathUtils } from 'three'
 import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js'
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js'
 import CheeseModel from './CheeseModel'
+import GraphicsQualityManager from './GraphicsQualityManager'
 
 let cachedFont = null
 let fontPromise = null
@@ -235,7 +236,8 @@ function Logo3DContent({ font }) {
 /**
  * Full 3D Interactive WebGL "Cheese Chase" Logo
  */
-export default function CheeseChaseLogo3D() {
+export default function CheeseChaseLogo3D({ graphicsQuality = 'high' }) {
+  const highQuality = graphicsQuality === 'high'
   const [font, setFont] = useState(cachedFont)
 
   useEffect(() => {
@@ -251,19 +253,22 @@ export default function CheeseChaseLogo3D() {
   return (
     <Canvas
       gl={{ antialias: true, alpha: true }}
+      shadows={highQuality}
+      dpr={highQuality ? [1, 1.5] : [1, 1]}
       camera={{ position: [0, 0, 4.7], fov: 46 }}
       className="w-full h-full pointer-events-auto"
     >
-      <ambientLight intensity={1.3} color="#fff8ec" />
+      <GraphicsQualityManager quality={graphicsQuality} />
+      <ambientLight intensity={highQuality ? 1.3 : 0.9} color="#fff8ec" />
       <directionalLight
         position={[4, 6, 6]}
-        intensity={2.2}
+        intensity={highQuality ? 2.2 : 1.1}
         color="#fff1d6"
-        castShadow
+        castShadow={highQuality}
         shadow-mapSize={[1024, 1024]}
       />
-      <directionalLight position={[-4, -3, 3]} intensity={0.7} color="#ffd599" />
-      <pointLight position={[0, 2, 2.5]} intensity={1.5} color="#ffe58f" distance={7} />
+      <directionalLight position={[-4, -3, 3]} intensity={highQuality ? 0.7 : 0.35} color="#ffd599" />
+      {highQuality && <pointLight position={[0, 2, 2.5]} intensity={1.5} color="#ffe58f" distance={7} />}
 
       <Logo3DContent font={font} />
     </Canvas>

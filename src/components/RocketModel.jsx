@@ -44,7 +44,7 @@ function loadRocketGltf() {
   return loadPromise
 }
 
-export default function RocketModel({ position, obstacleRef, onCollect }) {
+export default function RocketModel({ position, obstacleRef, onCollect, highQuality = true }) {
   const [model, setModel] = useState(() => cachedModel)
 
   useEffect(() => {
@@ -64,7 +64,7 @@ export default function RocketModel({ position, obstacleRef, onCollect }) {
       }}
     >
       <primitive object={clonedScene} scale={MODEL_SCALE} />
-      <pointLight color="#ff8a24" intensity={0.8} distance={2.5} />
+      {highQuality && <pointLight color="#ff8a24" intensity={0.8} distance={2.5} />}
     </group>
   )
 }

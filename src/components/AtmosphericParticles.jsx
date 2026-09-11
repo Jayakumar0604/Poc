@@ -120,5 +120,7 @@ export default function AtmosphericParticles({ active = true, speedRef, theme = 
     posAttr.needsUpdate = true
   })
 
+  if (!active) return null
+
   return <points ref={pointsRef} geometry={geometry} material={material} frustumCulled={false} />
 }
