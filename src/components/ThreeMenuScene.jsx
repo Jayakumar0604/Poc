@@ -456,14 +456,39 @@ export function ThreeMenuScene({ theme, graphicsQuality = 'high' }) {
       <GraphicsQualityManager quality={graphicsQuality} />
 
       {/* Lighting */}
-      <ambientLight intensity={isDay ? 1.1 : 0.35} color={isDay ? '#fff8ec' : '#334166'} />
-      <directionalLight
-        position={isDay ? [7, 15, 9] : [3, 11, 3]}
-        intensity={isDay ? 1.7 : 0.4}
-        color={isDay ? '#fff2d6' : '#88a4e0'}
-        castShadow
-        shadow-mapSize={[1024, 1024]}
-      />
+      {graphicsQuality === 'high' ? (
+        <>
+          <hemisphereLight
+            skyColor={isDay ? '#dff4ff' : '#24345f'}
+            groundColor={isDay ? '#8b5a3c' : '#120d16'}
+            intensity={isDay ? 0.65 : 0.35}
+          />
+          <directionalLight
+            position={isDay ? [7, 15, 9] : [3, 11, 3]}
+            intensity={isDay ? 1.35 : 0.55}
+            color={isDay ? '#fff2d6' : '#88a4e0'}
+            castShadow
+            shadow-mapSize={[2048, 2048]}
+            shadow-camera-left={-12}
+            shadow-camera-right={12}
+            shadow-camera-top={12}
+            shadow-camera-bottom={-12}
+            shadow-camera-near={0.5}
+            shadow-camera-far={80}
+            shadow-bias={-0.0005}
+            shadow-normalBias={0.02}
+          />
+        </>
+      ) : (
+        <>
+          <ambientLight intensity={isDay ? 0.8 : 0.3} color={isDay ? '#fff8ec' : '#334166'} />
+          <directionalLight
+            position={[4, 8, 4]}
+            intensity={isDay ? 0.8 : 0.45}
+            color={isDay ? '#fff2d6' : '#88a4e0'}
+          />
+        </>
+      )}
 
       {/* Environment */}
       <Scenery theme={theme} />

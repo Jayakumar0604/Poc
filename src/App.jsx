@@ -35,11 +35,12 @@ const CHEESE_GROUND_Y = GROUND_Y + 0.3
 const CHEESE_AIRBORNE_Y = FLIGHT_Y + 0.1
 const OVERHEAD_TYPES = ['table', 'pencils']
 const MOVING_TYPES = ['milk', 'mousetrap', 'yarn', 'book']
-const MIN_OBJECT_GAP = 10
+const MIN_OBJECT_GAP = 8
+const OBSTACLE_SPAWN_GAP = 7
 const INITIAL_CHEESE_REQUESTS = 4
 const chooseSpawnType = () => {
   const rand = Math.random()
-  if (rand > 0.45) return 'obstacle'
+  if (rand > 0.4) return 'obstacle'
   if (rand > 0.14) return 'cheese'
   if (rand > 0.07) return 'milk'
   if (rand > 0.03) return 'magnet'
@@ -98,14 +99,23 @@ function Lighting({ theme, highQuality }) {
           <hemisphereLight
             skyColor={day ? '#dff4ff' : '#24345f'}
             groundColor={day ? '#8b5a3c' : '#120d16'}
-            intensity={day ? 0.8 : 0.45}
+            intensity={day ? 0.65 : 0.35}
           />
           <directionalLight
             position={day ? [10, 20, 10] : [5, 10, 5]}
-            intensity={day ? 1.5 : 0.7}
+            intensity={day ? 1.25 : 0.6}
             color={day ? '#ffd39a' : '#d98b5f'}
             castShadow
-            shadow-radius={4}
+            shadow-mapSize={[2048, 2048]}
+            shadow-camera-left={-12}
+            shadow-camera-right={12}
+            shadow-camera-top={12}
+            shadow-camera-bottom={-12}
+            shadow-camera-near={0.5}
+            shadow-camera-far={80}
+            shadow-bias={-0.0005}
+            shadow-normalBias={0.02}
+            shadow-radius={3}
           />
         </>
       ) : (
@@ -739,7 +749,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
       if (i === 1) return { type: 'magnet', x: LANES[1], z: -24 }
       if (i === 4) return { type: 'rocket', x: LANES[2], z: -60 }
       const type = i % 2 ? OVERHEAD_TYPES[i % OVERHEAD_TYPES.length] : MOVING_TYPES[i % MOVING_TYPES.length]
-      return { type, x: LANES[i % 3], z: -12 - i * 12 }
+      return { type, x: LANES[i % 3], z: -10 - i * 9 }
     }),
     [],
   )
@@ -758,9 +768,9 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
       if (item.z > 5) {
         let z = playerRef.current.position.z - 80
         while (
-          items.some((other) => other !== item && Math.abs(other.z - z) < MIN_OBJECT_GAP) ||
-          [...coinPositions.current.values()].some((coin) => Math.abs(coin.z - z) < MIN_OBJECT_GAP)
-        ) z -= MIN_OBJECT_GAP
+          items.some((other) => other !== item && Math.abs(other.z - z) < OBSTACLE_SPAWN_GAP) ||
+          [...coinPositions.current.values()].some((coin) => Math.abs(coin.z - z) < OBSTACLE_SPAWN_GAP)
+        ) z -= OBSTACLE_SPAWN_GAP
         item.z = z
         item.x = randomLane()
         const type = chooseSpawnType()
@@ -774,9 +784,9 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
         } else if (type === 'rocket') {
           item.type = 'rocket'
         } else {
-          item.type = Math.random() < 0.5
-            ? OVERHEAD_TYPES[Math.floor(Math.random() * OVERHEAD_TYPES.length)]
-            : MOVING_TYPES[Math.floor(Math.random() * MOVING_TYPES.length)]
+          item.type = Math.random() < 0.65
+            ? MOVING_TYPES[Math.floor(Math.random() * MOVING_TYPES.length)]
+            : OVERHEAD_TYPES[Math.floor(Math.random() * OVERHEAD_TYPES.length)]
         }
       }
       const y = item.type === 'yarn'
@@ -924,7 +934,9 @@ function makeCoinLine(obstacles, positions, nextId, coinsSpawned, playerRef, sta
   const startZ = playerRef.current.position.z - startDistance - Math.random() * (startDistance === 80 ? 20 : 4)
   const zValues = Array.from({ length: count }, (_, i) => startZ - i * MIN_OBJECT_GAP)
   const lane = randomLane()
-  if (!zValues.every((z) => coinFits(z, lane, obstacles, positions))) return []
+  // Airborne cheese is intentionally allowed above ground obstacles so the
+  // flight lane remains available throughout the entire flight window.
+  if (!isFlightMode && !zValues.every((z) => coinFits(z, lane, obstacles, positions))) return []
 
   const result = []
 
@@ -988,6 +1000,7 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, 
   const timer = useRef(0)
   const nextId = useRef(0)
   const coinsSpawned = useRef(0)
+  const wasFlightMode = useRef(false)
 
   const commit = (items) => {
     live.current = items
@@ -999,18 +1012,41 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, 
     commit(live.current.filter((coin) => coin.id !== id))
   }
 
+  useEffect(() => {
+    if (rocketActive && !wasFlightMode.current) {
+      // Remove stale ground cheese and force the first airborne line to spawn
+      // on the very next render frame.
+      live.current.forEach((coin) => positions.current.delete(coin.id))
+      live.current = []
+      commit([])
+      timer.current = 0
+    } else if (!rocketActive && wasFlightMode.current) {
+      // Airborne cheese disappears as soon as Flight Mode ends.
+      const groundCoins = live.current.filter((coin) => !coin.isAirborne)
+      live.current.forEach((coin) => {
+        if (coin.isAirborne) positions.current.delete(coin.id)
+      })
+      commit(groundCoins)
+    }
+    wasFlightMode.current = rocketActive
+  }, [rocketActive, positions])
+
   useFrame((_, delta) => {
     if (!active) return
     timer.current -= delta
-    if (timer.current > 0 || cheeseRequests.current === 0) return
-    const startDistance = live.current.length === 0 ? 5 : 80
+    if (timer.current > 0 || (!rocketActive && cheeseRequests.current === 0)) return
+    const startDistance = rocketActive
+      ? (live.current.length === 0 ? 6 : 24)
+      : (live.current.length === 0 ? 5 : 80)
     const line = makeCoinLine(obstaclesRef.current, positions.current, nextId, coinsSpawned, playerRef, startDistance, rocketActive)
     if (!line.length) return
-    // oxlint-disable-next-line react/immutability
-    cheeseRequests.current -= 1
+    if (!rocketActive) {
+      // oxlint-disable-next-line react/immutability
+      cheeseRequests.current -= 1
+    }
     line.forEach((coin) => positions.current.set(coin.id, { x: coin.x, z: coin.z }))
     commit([...live.current, ...line])
-    timer.current = rocketActive ? 0.35 : 0.5
+    timer.current = rocketActive ? 0.3 : 0.5
   })
 
   return coins.map((coin) => (
