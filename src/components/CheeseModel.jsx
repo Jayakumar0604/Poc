@@ -1,51 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MeshStandardMaterial } from 'three'
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-
-let cachedModel = null
-let loadPromise = null
-
-/**
- * Preload and cache the 3D cheese model
- */
-function loadCheeseGltf() {
-  if (cachedModel) return Promise.resolve(cachedModel)
-  if (loadPromise) return loadPromise
-
-  loadPromise = new Promise((resolve, reject) => {
-    const loader = new GLTFLoader()
-    loader.load(
-      '/models/cheese/scene.gltf',
-      (gltf) => {
-        gltf.scene.traverse((child) => {
-          if (child.isMesh) {
-            child.castShadow = true
-            child.receiveShadow = true
-
-            if (child.material) {
-              const oldMat = child.material
-              child.material = new MeshStandardMaterial({
-                map: oldMat.map || null,
-                roughnessMap: oldMat.roughnessMap || null,
-                roughness: 0.45,
-                metalness: 0.05,
-              })
-            }
-          }
-        })
-        cachedModel = gltf.scene
-        resolve(cachedModel)
-      },
-      undefined,
-      (err) => {
-        console.error('Failed to load cheese model:', err)
-        reject(err)
-      },
-    )
-  })
-
-  return loadPromise
-}
+import { loadCheeseGltf } from './CheeseAsset'
 
 /**
  * Low Poly 3D Cheese Component
