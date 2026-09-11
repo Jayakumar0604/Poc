@@ -17,6 +17,7 @@ import ParticleEffects from './components/ParticleEffects'
 import { particleEmitter } from './utils/particleEmitter'
 import AtmosphericParticles from './components/AtmosphericParticles'
 import { RocketThrust, FlightSpeedStreaks, MagnetFluxParticles, CatChaseAura } from './components/SpecialEffects'
+import WindSpeedOverlay from './components/WindSpeedOverlay'
 
 const KEY = 'endless-runner-high-score'
 const FPS_KEY = 'show-fps-counter'
@@ -28,6 +29,7 @@ const MOUSE_GROUND_Y = GROUND_Y + 0.2
 const FLIGHT_Y = GROUND_Y + 2.7
 const CAT_GROUND_Y = GROUND_Y + 0.55
 const CHEESE_GROUND_Y = GROUND_Y + 0.3
+const CHEESE_AIRBORNE_Y = FLIGHT_Y + 0.1
 const OVERHEAD_TYPES = ['table', 'pencils']
 const MOVING_TYPES = ['milk', 'mousetrap', 'yarn', 'book']
 const MIN_OBJECT_GAP = 10
@@ -56,17 +58,26 @@ const coinFits = (z, lane, obstacles, positions) => (
   ))
 )
 
-function Camera({ isCaught, cinematic }) {
+function Camera({ isCaught, cinematic, flightActive = false }) {
   const { camera } = useThree()
+  const targetFov = flightActive ? 66 : 55
 
   useFrame((_, delta) => {
-    const targetZ = isCaught ? 3.5 : cinematic ? 5.5 : 7
-    const targetY = isCaught ? 2.8 : cinematic ? 2.6 : 3.5
+    const targetZ = isCaught ? 3.5 : cinematic ? 5.5 : flightActive ? 8.2 : 7
+    const targetY = isCaught ? 2.8 : cinematic ? 2.6 : flightActive ? 4.8 : 3.5
+    const targetLookAtY = isCaught ? 0.2 : flightActive ? 1.4 : 0.1
+
     camera.position.lerp(
       { x: camera.position.x, y: targetY, z: targetZ },
-      Math.min(1, delta * 6),
+      Math.min(1, delta * (flightActive ? 4 : 5)),
     )
-    camera.lookAt(0, isCaught ? 0.2 : 0.1, cinematic ? -10 : -18)
+    camera.lookAt(0, targetLookAtY, cinematic ? -10 : -18)
+
+    if (Math.abs(camera.fov - targetFov) > 0.1) {
+      // oxlint-disable-next-line react/immutability
+      camera.fov = MathUtils.lerp(camera.fov, targetFov, Math.min(1, delta * 5))
+      camera.updateProjectionMatrix()
+    }
   })
 
   return null
@@ -351,16 +362,20 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActiv
 
     if (flightMode) {
       const targetY = rocketActive ? FLIGHT_Y : MOUSE_GROUND_Y
-      player.position.y = MathUtils.lerp(player.position.y, targetY, Math.min(1, delta * 8))
+      const lerpSpeed = rocketActive ? 6 : 4.5
+      player.position.y = MathUtils.lerp(player.position.y, targetY, Math.min(1, delta * lerpSpeed))
       velocity.current = 0
       grounded.current = false
       ducking.current = false
 
-      if (!rocketActive && Math.abs(player.position.y - MOUSE_GROUND_Y) < 0.03) {
+      if (!rocketActive && Math.abs(player.position.y - MOUSE_GROUND_Y) < 0.04) {
         player.position.y = MOUSE_GROUND_Y
         grounded.current = true
         recoveringFromFlight.current = false
         flightModeRef.current = false
+        landSquash.current = 0.65 // Landing impact squash
+        particleEmitter.emitLandShockwave(player.position.x, MOUSE_GROUND_Y, player.position.z)
+        particleEmitter.emitDustPuff(player.position.x, MOUSE_GROUND_Y - 0.1, player.position.z + 0.16, 1.4, 4)
       }
     } else if (!grounded.current) {
       velocity.current -= 30 * delta
@@ -377,10 +392,29 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActiv
     landSquash.current = MathUtils.lerp(landSquash.current, 1, Math.min(1, delta * 10))
 
     if (flightMode) {
-      player.scale.set(0.92, 0.92, 0.92)
-      player.rotation.x = -0.18
-      player.rotation.z = bankZ
-      player.rotation.y = yawY
+      const altitudeProgress = Math.max(0, Math.min(1, (player.position.y - MOUSE_GROUND_Y) / (FLIGHT_Y - MOUSE_GROUND_Y)))
+      if (rocketActive) {
+        if (altitudeProgress < 0.85) {
+          // Takeoff pitch: nose angled upward into flight path
+          player.scale.set(0.92, 0.9, 1.15)
+          player.rotation.x = -0.34
+          player.rotation.z = bankZ * 1.1
+          player.rotation.y = yawY
+        } else {
+          // Cruising aerodynamic glide: streamlined body, sharp bank into lane turns, slipstream bobbing
+          player.scale.set(0.88, 0.82, 1.22)
+          player.rotation.x = -0.14
+          player.rotation.z = bankZ * 1.35
+          player.rotation.y = yawY * 1.2
+          player.position.y += Math.sin(t * 10) * 0.012
+        }
+      } else {
+        // Landing descent flare: air-brake flare with nose tilted slightly up
+        player.scale.set(1.04, 0.94, 0.96)
+        player.rotation.x = 0.16
+        player.rotation.z = bankZ * 0.9
+        player.rotation.y = yawY
+      }
     } else if (ducking.current) {
       // Sleek torpedo belly slide with low collision profile
       player.scale.set(1.15, 0.45, 1.4)
@@ -420,10 +454,18 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActiv
       }
     }
 
-    // Reactive tail whip
+    // Reactive tail whip & slipstream flutter
     if (tailRef.current) {
-      tailRef.current.rotation.z = Math.sin(t * 20) * 0.25 - dx * 0.5
-      tailRef.current.rotation.x = Math.PI / 2 + (ducking.current ? 0.22 : Math.sin(t * 18) * 0.1)
+      if (flightMode && rocketActive) {
+        tailRef.current.rotation.z = Math.sin(t * 32) * 0.45 - dx * 0.6
+        tailRef.current.rotation.x = Math.PI / 2 + 0.35
+      } else if (flightMode) {
+        tailRef.current.rotation.z = Math.sin(t * 18) * 0.25 - dx * 0.4
+        tailRef.current.rotation.x = Math.PI / 2 - 0.15
+      } else {
+        tailRef.current.rotation.z = Math.sin(t * 20) * 0.25 - dx * 0.5
+        tailRef.current.rotation.x = Math.PI / 2 + (ducking.current ? 0.22 : Math.sin(t * 18) * 0.1)
+      }
     }
   })
 
@@ -453,6 +495,15 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActiv
         <sphereGeometry args={[0.035, 8, 8]} />
         <meshStandardMaterial color="#050505" flatShading />
       </mesh>
+      {/* Front gliding paws */}
+      <mesh position={[-0.14, -0.06, -0.18]} castShadow>
+        <sphereGeometry args={[0.04, 6, 6]} />
+        <meshStandardMaterial color="#ff9bb5" flatShading />
+      </mesh>
+      <mesh position={[0.14, -0.06, -0.18]} castShadow>
+        <sphereGeometry args={[0.04, 6, 6]} />
+        <meshStandardMaterial color="#ff9bb5" flatShading />
+      </mesh>
       <mesh ref={tailRef} position={[0, 0, 0.32]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
         <cylinderGeometry args={[0.015, 0.015, 0.6]} />
         <meshStandardMaterial color="#555" flatShading />
@@ -471,11 +522,11 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActiv
         <group position={[0, -0.28, 0.28]} rotation={[Math.PI, 0, 0]}>
           <mesh castShadow>
             <coneGeometry args={[0.14, 0.46, 8]} />
-            <meshStandardMaterial color="#ff6b1a" emissive="#ff3200" emissiveIntensity={1.8} />
+            <meshStandardMaterial color="#ff6b1a" emissive="#ff3200" emissiveIntensity={2.2} />
           </mesh>
           <mesh position={[0, -0.03, 0]}>
             <coneGeometry args={[0.07, 0.3, 8]} />
-            <meshStandardMaterial color="#ffe066" emissive="#ff9f00" emissiveIntensity={2.4} />
+            <meshStandardMaterial color="#ffe066" emissive="#ff9f00" emissiveIntensity={2.8} />
           </mesh>
           <RocketThrust />
         </group>
@@ -739,9 +790,15 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, magnetActive,
     const p = playerRef.current ? playerRef.current.position : null
     const t = state.clock.elapsedTime
 
+    // Player altitude state: player is airborne if elevated during flight
+    const isPlayerAirborne = Boolean(p && p.y > GROUND_Y + 1.2)
+    // Specific collision constraint: While airborne, player can ONLY collect airborne cheese.
+    // While on ground, player can only collect ground cheese.
+    const canCollect = isPlayerAirborne ? Boolean(coin.isAirborne) : !coin.isAirborne
+
     let isPulled = false
 
-    if (magnetActive && p && posZ.current < p.z + 2) {
+    if (magnetActive && canCollect && p && posZ.current < p.z + 2) {
       const targetY = p.y + 0.2
       const dx = p.x - posX.current
       const dy = targetY - posY.current
@@ -790,21 +847,25 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, magnetActive,
         return
       }
 
-      const blocked = obstaclesRef.current.some(
-        (obstacle) =>
-          Math.abs(obstacle.x - posX.current) < 0.9 &&
-          Math.abs(obstacle.z - posZ.current) < 0.9,
-      )
-      if (blocked) {
-        collected.current = true
-        onRemove(coin.id)
-        return
+      // Ground obstacles do not block airborne cheese
+      if (!coin.isAirborne) {
+        const blocked = obstaclesRef.current.some(
+          (obstacle) =>
+            Math.abs(obstacle.x - posX.current) < 0.9 &&
+            Math.abs(obstacle.z - posZ.current) < 0.9,
+        )
+        if (blocked) {
+          collected.current = true
+          onRemove(coin.id)
+          return
+        }
       }
 
       if (
         p &&
+        canCollect &&
         Math.abs(posX.current - p.x) < 0.9 &&
-        Math.abs(posY.current - p.y) < 1 &&
+        Math.abs(posY.current - p.y) < 1.0 &&
         Math.abs(posZ.current - p.z) < 1.1
       ) {
         collected.current = true
@@ -830,26 +891,69 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, magnetActive,
   )
 }
 
-function makeCoinLine(obstacles, positions, nextId, coinsSpawned, playerRef, startDistance = 80) {
+function makeCoinLine(obstacles, positions, nextId, coinsSpawned, playerRef, startDistance = 80, isFlightMode = false) {
   const count = startDistance === 80 ? 3 + Math.floor(Math.random() * 2) : 3
   const startZ = playerRef.current.position.z - startDistance - Math.random() * (startDistance === 80 ? 20 : 4)
   const zValues = Array.from({ length: count }, (_, i) => startZ - i * MIN_OBJECT_GAP)
   const lane = randomLane()
   if (!zValues.every((z) => coinFits(z, lane, obstacles, positions))) return []
-  return zValues.map((z) => {
-    const superCoin = coinsSpawned.current++ % 11 === 10
-    return {
-      id: nextId.current++,
-      x: lane,
-      y: CHEESE_GROUND_Y,
-      z,
-      superCoin,
-      value: superCoin ? 20 : 5,
-    }
-  })
+
+  const result = []
+
+  if (isFlightMode) {
+    // Dual-level spawning: Airborne cheese line AND Ground cheese line simultaneously
+    // 1. Airborne cheese line
+    zValues.forEach((z) => {
+      const superCoin = coinsSpawned.current++ % 11 === 10
+      result.push({
+        id: nextId.current++,
+        x: lane,
+        y: CHEESE_AIRBORNE_Y,
+        z,
+        isAirborne: true,
+        superCoin,
+        value: superCoin ? 25 : 10,
+      })
+    })
+
+    // 2. Ground cheese line
+    const otherLanes = LANES.filter((l) => l !== lane)
+    const groundLane = otherLanes[Math.floor(Math.random() * otherLanes.length)]
+    const canUseOtherLane = zValues.every((z) => coinFits(z, groundLane, obstacles, positions))
+    const selectedGroundLane = canUseOtherLane ? groundLane : lane
+
+    zValues.forEach((z) => {
+      const superCoin = coinsSpawned.current++ % 11 === 10
+      result.push({
+        id: nextId.current++,
+        x: selectedGroundLane,
+        y: CHEESE_GROUND_Y,
+        z,
+        isAirborne: false,
+        superCoin,
+        value: superCoin ? 20 : 5,
+      })
+    })
+  } else {
+    // Ground level only
+    zValues.forEach((z) => {
+      const superCoin = coinsSpawned.current++ % 11 === 10
+      result.push({
+        id: nextId.current++,
+        x: lane,
+        y: CHEESE_GROUND_Y,
+        z,
+        isAirborne: false,
+        superCoin,
+        value: superCoin ? 20 : 5,
+      })
+    })
+  }
+
+  return result
 }
 
-function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, cheeseRequests, magnetActive, onCoin }) {
+function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, cheeseRequests, magnetActive, rocketActive, onCoin }) {
   const [coins, setCoins] = useState([])
   const live = useRef([])
   const positions = positionsRef
@@ -872,13 +976,13 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, 
     timer.current -= delta
     if (timer.current > 0 || cheeseRequests.current === 0) return
     const startDistance = live.current.length === 0 ? 5 : 80
-    const line = makeCoinLine(obstaclesRef.current, positions.current, nextId, coinsSpawned, playerRef, startDistance)
+    const line = makeCoinLine(obstaclesRef.current, positions.current, nextId, coinsSpawned, playerRef, startDistance, rocketActive)
     if (!line.length) return
     // oxlint-disable-next-line react/immutability
     cheeseRequests.current -= 1
     line.forEach((coin) => positions.current.set(coin.id, { x: coin.x, z: coin.z }))
     commit([...live.current, ...line])
-    timer.current = 0.5
+    timer.current = rocketActive ? 0.35 : 0.5
   })
 
   return coins.map((coin) => (
@@ -1065,7 +1169,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         onRocket()
         continue
       }
-      if (flightModeRef.current) continue
+      if (flightModeRef.current || rocketActive) continue
       if (invincibleTime > 0 || playerStats.current.invincibleUntil > state.clock.elapsedTime) continue
       const hitJumpObject = ['milk', 'mousetrap', 'book', 'yarn'].includes(obstacle.type) && player.current.position.y < 0.5
       const hitOverhead = OVERHEAD_TYPES.includes(obstacle.type) && player.current.scale.y > 0.6
@@ -1084,7 +1188,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
 
   return (
     <>
-      <Camera isCaught={isCaught} cinematic={cinematic} />
+      <Camera isCaught={isCaught} cinematic={cinematic} flightActive={rocketActive} />
       <Lighting theme={theme} />
       <SkyEnvironment active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
       <SideScenery active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
@@ -1119,6 +1223,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         positionsRef={coinPositions}
         cheeseRequests={cheeseRequests}
         magnetActive={magnetActive}
+        rocketActive={rocketActive}
         onCoin={onCoin}
       />
     </>
@@ -1151,6 +1256,7 @@ function HighScore({ score, onBack }) {
 function UIOverlay({ score, coinCount, fps, showFps, invincibleTime, magnetTime, rocketTime, isPaused, gameOver, onRestart, onMenu, onResume }) {
   return (
     <div className="font-cartoon pointer-events-none absolute inset-0 select-none">
+      <WindSpeedOverlay active={rocketTime > 0} />
       <div className="absolute left-5 top-5 rounded-xl border border-[#fed23a]/30 bg-[#321c13]/85 px-4 py-2 text-xs text-[#d8c3b0] shadow-lg backdrop-blur-sm">
         <span className="font-black text-[#fed23a]">CHEESE CHASE</span> · A/D or ←/→
       </div>
@@ -1392,7 +1498,7 @@ export default function App() {
           onCoin={(value) => setCoinCount((total) => total + value)}
           onMilk={() => setInvincibleTime(5)}
           onMagnet={() => setMagnetTime(8)}
-          onRocket={() => setRocketTime(5)}
+          onRocket={() => setRocketTime(10)}
           onCaught={caught}
         />
         <EffectComposer multisampling={0} enableNormalPass>
