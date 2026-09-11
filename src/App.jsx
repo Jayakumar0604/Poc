@@ -945,9 +945,9 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         continue
       }
       if (invincibleTime > 0 || playerStats.current.invincibleUntil > state.clock.elapsedTime) continue
-      const hitJumpObject = ['milk', 'mousetrap', 'book'].includes(obstacle.type) && player.current.position.y < 0.5
+      const hitJumpObject = ['milk', 'mousetrap', 'book', 'yarn'].includes(obstacle.type) && player.current.position.y < 0.5
       const hitOverhead = OVERHEAD_TYPES.includes(obstacle.type) && player.current.scale.y > 0.6
-      const collision = hitX && hitZ && (hitJumpObject || hitOverhead || obstacle.type === 'yarn')
+      const collision = hitX && hitZ && (hitJumpObject || hitOverhead)
 
       if (collision && state.clock.elapsedTime - playerStats.current.lastHitTime > 1.5) {
         playerStats.current.lastHitTime = state.clock.elapsedTime
