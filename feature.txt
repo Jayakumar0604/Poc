@@ -1,0 +1,11 @@
+Add a Rocket power-up feature to the player mechanics.
+
+Trigger: When the player collects or clicks the Rocket item, activate 'Flight Mode'.
+
+Movement: Interpolate the player's Y-position to a fixed height above the obstacles. Lock the Y-axis so the player stays in the air, but allow normal Left/Right lane movement.
+
+Physics/Collision: Temporarily disable gravity and ignore collisions with ground-level obstacles.
+
+Effects: Attach a thrust/particle flame effect to the player.
+
+Cooldown/Reset: Set a timer for 5 seconds. Once the timer ends, smoothly interpolate the player's Y-position back to the ground level, re-enable gravity, and restore normal collision logic.

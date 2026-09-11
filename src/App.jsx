@@ -11,6 +11,7 @@ import YarnModel from './components/YarnModel'
 import MilkModel, { MILK_MODEL_CENTER_OFFSET } from './components/MilkModel'
 import CheeseModel from './components/CheeseModel'
 import MagnetModel from './components/MagnetModel'
+import RocketModel from './components/RocketModel'
 import { BookObstacle, BOOK_MODEL_CENTER_OFFSET } from './components/BookModel'
 
 const KEY = 'endless-runner-high-score'
@@ -20,6 +21,7 @@ const LANES = [-LANE_STEP, 0, LANE_STEP]
 const randomLane = () => LANES[Math.floor(Math.random() * LANES.length)]
 const GROUND_Y = -0.57
 const MOUSE_GROUND_Y = GROUND_Y + 0.2
+const FLIGHT_Y = GROUND_Y + 2.7
 const CAT_GROUND_Y = GROUND_Y + 0.55
 const CHEESE_GROUND_Y = GROUND_Y + 0.3
 const OVERHEAD_TYPES = ['table', 'pencils']
@@ -31,7 +33,8 @@ const chooseSpawnType = () => {
   if (rand > 0.45) return 'obstacle'
   if (rand > 0.14) return 'cheese'
   if (rand > 0.07) return 'milk'
-  return 'magnet'
+  if (rand > 0.03) return 'magnet'
+  return 'rocket'
 }
 const DIFFICULTIES = {
   Easy: { baseSpeed: 3, maxSpeed: 12 },
@@ -248,7 +251,44 @@ function MenuDecor() {
   )
 }
 
-function Mouse({ playerRef, active, cinematic, magnetActive = false }) {
+function RocketThrust() {
+  const particlesRef = useRef()
+  const particles = useMemo(
+    () => Array.from({ length: 12 }, (_, index) => ({
+      phase: index / 12,
+      spread: ((index * 17) % 9 - 4) / 40,
+      depth: ((index * 11) % 7 - 3) / 45,
+    })),
+    [],
+  )
+
+  useFrame((state) => {
+    if (!particlesRef.current) return
+    particlesRef.current.children.forEach((particle, index) => {
+      const data = particles[index]
+      const progress = (state.clock.elapsedTime * 2.8 + data.phase) % 1
+      const fade = 1 - progress
+      particle.position.x = data.spread * (0.35 + progress)
+      particle.position.y = -0.32 - progress * 0.52
+      particle.position.z = data.depth * (0.35 + progress)
+      particle.scale.setScalar(0.45 + fade * 0.8)
+      particle.material.opacity = fade * 0.9
+    })
+  })
+
+  return (
+    <group ref={particlesRef}>
+      {particles.map((particle, index) => (
+        <mesh key={index}>
+          <sphereGeometry args={[0.045, 6, 4]} />
+          <meshBasicMaterial color={index % 2 ? '#ffd34e' : '#ff6b1a'} transparent opacity={0.8} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActive = false, flightModeRef }) {
   const mouseRef = useRef()
   const tailRef = useRef()
   const velocity = useRef(0)
@@ -256,11 +296,28 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false }) {
   const ducking = useRef(false)
   const targetX = useRef(cinematic ? -2.4 : 0)
   const landSquash = useRef(1)
+  const wasRocketActive = useRef(false)
+  const recoveringFromFlight = useRef(false)
 
   const attachMouse = useCallback((node) => {
     mouseRef.current = node
     playerRef.current = node
   }, [playerRef])
+
+  useEffect(() => {
+    if (rocketActive) {
+      wasRocketActive.current = true
+      recoveringFromFlight.current = false
+      grounded.current = false
+      ducking.current = false
+      velocity.current = 0
+    } else if (wasRocketActive.current) {
+      wasRocketActive.current = false
+      recoveringFromFlight.current = true
+      grounded.current = false
+      velocity.current = 0
+    }
+  }, [rocketActive])
 
   const setDuck = useCallback((value) => {
     const player = mouseRef.current
@@ -321,7 +378,23 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false }) {
     const bankZ = -dx * 0.35
     const yawY = dx * 0.2
 
-    if (!grounded.current) {
+    const flightMode = rocketActive || recoveringFromFlight.current
+    flightModeRef.current = flightMode
+
+    if (flightMode) {
+      const targetY = rocketActive ? FLIGHT_Y : MOUSE_GROUND_Y
+      player.position.y = MathUtils.lerp(player.position.y, targetY, Math.min(1, delta * 8))
+      velocity.current = 0
+      grounded.current = false
+      ducking.current = false
+
+      if (!rocketActive && Math.abs(player.position.y - MOUSE_GROUND_Y) < 0.03) {
+        player.position.y = MOUSE_GROUND_Y
+        grounded.current = true
+        recoveringFromFlight.current = false
+        flightModeRef.current = false
+      }
+    } else if (!grounded.current) {
       velocity.current -= 30 * delta
       player.position.y += velocity.current * delta
       if (player.position.y <= MOUSE_GROUND_Y) {
@@ -334,7 +407,12 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false }) {
 
     landSquash.current = MathUtils.lerp(landSquash.current, 1, Math.min(1, delta * 10))
 
-    if (ducking.current) {
+    if (flightMode) {
+      player.scale.set(0.92, 0.92, 0.92)
+      player.rotation.x = -0.18
+      player.rotation.z = bankZ
+      player.rotation.y = yawY
+    } else if (ducking.current) {
       // Sleek torpedo belly slide with low collision profile
       player.scale.set(1.15, 0.45, 1.4)
       player.position.y = GROUND_Y + 0.1 + Math.sin(t * 22) * 0.02
@@ -405,6 +483,19 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false }) {
           </mesh>
         </group>
       )}
+      {rocketActive && (
+        <group position={[0, -0.28, 0.28]} rotation={[Math.PI, 0, 0]}>
+          <mesh castShadow>
+            <coneGeometry args={[0.14, 0.46, 8]} />
+            <meshStandardMaterial color="#ff6b1a" emissive="#ff3200" emissiveIntensity={1.8} />
+          </mesh>
+          <mesh position={[0, -0.03, 0]}>
+            <coneGeometry args={[0.07, 0.3, 8]} />
+            <meshStandardMaterial color="#ffe066" emissive="#ff9f00" emissiveIntensity={2.4} />
+          </mesh>
+          <RocketThrust />
+        </group>
+      )}
     </group>
   )
 }
@@ -468,6 +559,16 @@ function MilkBowl({ position, obstacleRef }) {
   return <MilkModel position={position} obstacleRef={obstacleRef} />
 }
 
+function RocketPickup({ position, obstacleRef, onCollect }) {
+  return (
+    <RocketModel
+      position={position}
+      obstacleRef={obstacleRef}
+      onCollect={onCollect}
+    />
+  )
+}
+
 function MagnetPickup({ position, obstacleRef }) {
   const spinRef = useRef()
 
@@ -487,7 +588,7 @@ function MagnetPickup({ position, obstacleRef }) {
   )
 }
 
-function Obstacle({ type, position, obstacleRef }) {
+function Obstacle({ type, position, obstacleRef, onRocket }) {
   const materials = useMemo(() => ({
     milk: '#fff7e6',
     mousetrap: '#d64545',
@@ -499,6 +600,7 @@ function Obstacle({ type, position, obstacleRef }) {
   if (type === 'empty') return null
   if (type === 'yarn') return <Yarn position={position} obstacleRef={obstacleRef} />
   if (type === 'milkBowl') return <MilkBowl position={position} obstacleRef={obstacleRef} />
+  if (type === 'rocket') return <RocketPickup position={position} obstacleRef={obstacleRef} onCollect={onRocket} />
   if (type === 'magnet') return <MagnetPickup position={position} obstacleRef={obstacleRef} />
 
   if (type === 'pencils') {
@@ -553,10 +655,11 @@ function Obstacle({ type, position, obstacleRef }) {
   )
 }
 
-function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, cheeseRequests }) {
+function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, cheeseRequests, onRocket }) {
   const items = useMemo(
     () => Array.from({ length: 9 }, (_, i) => {
       if (i === 1) return { type: 'magnet', x: LANES[1], z: -24 }
+      if (i === 4) return { type: 'rocket', x: LANES[2], z: -60 }
       const type = i % 2 ? OVERHEAD_TYPES[i % OVERHEAD_TYPES.length] : MOVING_TYPES[i % MOVING_TYPES.length]
       return { type, x: LANES[i % 3], z: -12 - i * 12 }
     }),
@@ -590,6 +693,8 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
           item.type = 'milkBowl'
         } else if (type === 'magnet') {
           item.type = 'magnet'
+        } else if (type === 'rocket') {
+          item.type = 'rocket'
         } else {
           item.type = Math.random() < 0.5
             ? OVERHEAD_TYPES[Math.floor(Math.random() * OVERHEAD_TYPES.length)]
@@ -617,6 +722,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
       type={item.type}
       position={[item.x, GROUND_Y, item.z]}
       obstacleRef={(mesh) => (refs.current[index] = mesh)}
+      onRocket={onRocket}
     />
   ))
 }
@@ -893,7 +999,7 @@ function Environment({ active, speedRef }) {
   )
 }
 
-function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseSpeed, maxSpeed, invincibleTime, magnetActive, showFps, onFps, onScore, onCaught, onMilk, onMagnet, onCoin }) {
+function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseSpeed, maxSpeed, invincibleTime, magnetActive, rocketActive, showFps, onFps, onScore, onCaught, onMilk, onMagnet, onRocket, onCoin }) {
   const player = useRef()
   const cat = useRef()
   const obstacles = useRef([])
@@ -905,6 +1011,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
   const fpsFrames = useRef(0)
   const coinPositions = useRef(new Map())
   const cheeseRequests = useRef(INITIAL_CHEESE_REQUESTS)
+  const flightModeRef = useRef(false)
 
   useFrame((state, delta) => {
     if (showFps) {
@@ -944,6 +1051,12 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         onMagnet()
         continue
       }
+      if (obstacle.type === 'rocket' && pickupHit) {
+        obstacle.z = 2
+        onRocket()
+        continue
+      }
+      if (flightModeRef.current) continue
       if (invincibleTime > 0 || playerStats.current.invincibleUntil > state.clock.elapsedTime) continue
       const hitJumpObject = ['milk', 'mousetrap', 'book', 'yarn'].includes(obstacle.type) && player.current.position.y < 0.5
       const hitOverhead = OVERHEAD_TYPES.includes(obstacle.type) && player.current.scale.y > 0.6
@@ -967,7 +1080,14 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       <SideScenery active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
       <Environment active={active && !isPaused && !isCaught} speedRef={currentSpeed} />
       {cinematic && <MenuDecor />}
-      <Mouse playerRef={player} active={active && !isPaused && !isCaught} cinematic={cinematic} magnetActive={magnetActive} />
+      <Mouse
+        playerRef={player}
+        active={active && !isPaused && !isCaught}
+        cinematic={cinematic}
+        magnetActive={magnetActive}
+        rocketActive={rocketActive}
+        flightModeRef={flightModeRef}
+      />
       <Cat catRef={cat} playerRef={player} playerStats={playerStats} active={active && !isPaused} isCaught={isCaught} />
       <Obstacles
         active={active && !isPaused}
@@ -976,6 +1096,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         playerRef={player}
         coinPositions={coinPositions}
         cheeseRequests={cheeseRequests}
+        onRocket={onRocket}
       />
       <CoinSpawner
         active={active && !isPaused && !isCaught}
@@ -1014,7 +1135,7 @@ function HighScore({ score, onBack }) {
   )
 }
 
-function UIOverlay({ score, coinCount, fps, showFps, invincibleTime, magnetTime, isPaused, gameOver, onRestart, onMenu, onResume }) {
+function UIOverlay({ score, coinCount, fps, showFps, invincibleTime, magnetTime, rocketTime, isPaused, gameOver, onRestart, onMenu, onResume }) {
   return (
     <div className="font-cartoon pointer-events-none absolute inset-0 select-none">
       <div className="absolute left-5 top-5 rounded-xl border border-[#fed23a]/30 bg-[#321c13]/85 px-4 py-2 text-xs text-[#d8c3b0] shadow-lg backdrop-blur-sm">
@@ -1036,6 +1157,11 @@ function UIOverlay({ score, coinCount, fps, showFps, invincibleTime, magnetTime,
         {magnetTime > 0 && (
           <div className="bg-gradient-to-r from-red-600 to-amber-500 border-4 border-black text-white font-black text-2xl sm:text-3xl px-6 py-2 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-pulse flex items-center gap-2">
             <span>🧲</span> MAGNET: {magnetTime}s
+          </div>
+        )}
+        {rocketTime > 0 && (
+          <div className="bg-gradient-to-r from-orange-500 to-yellow-400 border-4 border-black text-white font-black text-2xl sm:text-3xl px-6 py-2 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-pulse flex items-center gap-2">
+            <span>🚀</span> FLIGHT MODE: {rocketTime}s
           </div>
         )}
       </div>
@@ -1101,6 +1227,7 @@ export default function App() {
   const [showFps, setShowFps] = useState(() => readFpsPreference())
   const [invincibleTime, setInvincibleTime] = useState(0)
   const [magnetTime, setMagnetTime] = useState(0)
+  const [rocketTime, setRocketTime] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
   const [isCaught, setIsCaught] = useState(false)
   const [theme, setTheme] = useState('day')
@@ -1138,6 +1265,7 @@ export default function App() {
     setFps(0)
     setInvincibleTime(3)
     setMagnetTime(0)
+    setRocketTime(0)
     hits.current = 0
     setRun((value) => value + 1)
     setScreen('playing')
@@ -1178,6 +1306,12 @@ export default function App() {
     const timer = setInterval(() => setMagnetTime((time) => Math.max(0, time - 1)), 1000)
     return () => clearInterval(timer)
   }, [magnetTime])
+
+  useEffect(() => {
+    if (rocketTime <= 0) return undefined
+    const timer = setInterval(() => setRocketTime((time) => Math.max(0, time - 1)), 1000)
+    return () => clearInterval(timer)
+  }, [rocketTime])
 
   if (screen === 'menu') {
     return (
@@ -1238,12 +1372,14 @@ export default function App() {
           maxSpeed={settings.maxSpeed}
           invincibleTime={invincibleTime}
           magnetActive={magnetTime > 0}
+          rocketActive={rocketTime > 0}
           showFps={showFps}
           onFps={setFps}
           onScore={setScore}
           onCoin={(value) => setCoinCount((total) => total + value)}
           onMilk={() => setInvincibleTime(5)}
           onMagnet={() => setMagnetTime(8)}
+          onRocket={() => setRocketTime(5)}
           onCaught={caught}
         />
         <EffectComposer multisampling={0} enableNormalPass>
@@ -1257,6 +1393,7 @@ export default function App() {
         showFps={showFps}
         invincibleTime={invincibleTime}
         magnetTime={magnetTime}
+        rocketTime={rocketTime}
         isPaused={isPaused}
         gameOver={screen === 'gameover'}
         onRestart={() => start(settings)}
