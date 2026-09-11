@@ -503,6 +503,12 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActiv
 function Cat({ catRef, playerRef, playerStats, active, isCaught }) {
   const startTime = useRef(null)
 
+  useEffect(() => {
+    if (!active) {
+      startTime.current = null
+    }
+  }, [active])
+
   useFrame((state, delta) => {
     if (!active || !catRef.current || !playerRef.current) return
     if (startTime.current === null) startTime.current = state.clock.elapsedTime
@@ -525,28 +531,28 @@ function Cat({ catRef, playerRef, playerStats, active, isCaught }) {
       cat.scale.set(1.05, 0.9, 1.25)
     } else {
       const chase = playerStats.current.hits === 1
-      const visible = chase || elapsed < 3
-      const targetZ = chase ? mouse.z + 1.4 : visible ? mouse.z + 2.0 : mouse.z + 15
+      const visible = chase || elapsed < 4.0
+      const targetZ = chase ? mouse.z + 0.85 : visible ? mouse.z + 1.1 : mouse.z + 15
       cat.visible = visible
-      cat.position.x = MathUtils.lerp(cat.position.x, mouse.x, 0.06)
-      cat.position.z = MathUtils.lerp(cat.position.z, targetZ, 0.06)
+      cat.position.x = MathUtils.lerp(cat.position.x, mouse.x, 0.08)
+      cat.position.z = MathUtils.lerp(cat.position.z, targetZ, 0.08)
 
       const t = state.clock.elapsedTime
       const gallop = Math.sin(t * 18)
       const swerve = mouse.x - cat.position.x
 
       // Undulating bounding predator gallop
-      cat.rotation.x = gallop * 0.13 + 0.04
+      cat.rotation.x = -gallop * 0.13 - 0.04
       cat.rotation.z = Math.cos(t * 18) * 0.09 - swerve * 0.28
-      cat.rotation.y = Math.PI + swerve * 0.18
+      cat.rotation.y = Math.PI - swerve * 0.18
       cat.position.y = CAT_GROUND_Y + Math.max(0, gallop) * 0.18
       cat.scale.set(1 - gallop * 0.04, 1 + gallop * 0.06, 1 + gallop * 0.03)
     }
   })
 
   return (
-    <group ref={catRef} position={[0, CAT_GROUND_Y, 2.0]} visible={active || isCaught}>
-      <CatModel position={[0, -0.55, 0]} scale={0.0022} />
+    <group ref={catRef} position={[0, CAT_GROUND_Y, 1.1]} visible={active || isCaught}>
+      <CatModel position={[0, -0.55, 0]} scale={0.0022} rotation={[0, 0, 0]} />
     </group>
   )
 }

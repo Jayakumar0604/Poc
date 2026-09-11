@@ -62,7 +62,7 @@ function loadCatGltf() {
 export default function CatModel({
   scale = 0.0022,
   position = [0, 0, 0],
-  rotation = [0, Math.PI, 0],
+  rotation = [0, 0, 0],
   ...props
 }) {
   const [model, setModel] = useState(() => cachedModel)
