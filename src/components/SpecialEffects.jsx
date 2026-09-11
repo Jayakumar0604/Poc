@@ -1,6 +1,6 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { BufferAttribute, BufferGeometry, Color } from 'three'
+import { AdditiveBlending, BufferAttribute, BufferGeometry, Color } from 'three'
 
 function pseudoRandom(seed) {
   const x = Math.sin(seed * 127.1 + 311.7) * 43758.5453123
@@ -17,27 +17,38 @@ function pseudoRandom(seed) {
 export function RocketThrust() {
   const flameGroup = useRef()
   const smokeGroup = useRef()
+  const sparkGroup = useRef()
+  const flameLight = useRef()
 
   const flameParticles = useMemo(
     () =>
-      Array.from({ length: 18 }, (_, i) => ({
-        phase: i / 18,
-        spreadX: ((i * 17) % 11 - 5) / 50,
-        spreadZ: ((i * 23) % 11 - 5) / 55,
-        color: i < 6 ? '#ffffff' : i < 12 ? '#ffe066' : '#ff4d00',
-        size: i < 6 ? 0.05 : 0.07,
+      Array.from({ length: 24 }, (_, i) => ({
+        phase: i / 24,
+        spreadX: ((i * 17) % 15 - 7) / 52,
+        spreadZ: ((i * 23) % 15 - 7) / 58,
+        color: i < 8 ? '#ffffff' : i < 16 ? '#ffe066' : '#ff4d00',
+        size: i < 8 ? 0.045 : 0.065,
       })),
     [],
   )
 
   const smokeParticles = useMemo(
     () =>
-      Array.from({ length: 12 }, (_, i) => ({
-        phase: i / 12,
-        spreadX: ((i * 19) % 13 - 6) / 35,
-        spreadZ: ((i * 29) % 13 - 6) / 38,
-        color: i % 2 ? '#5c4d44' : '#3d3028',
+      Array.from({ length: 16 }, (_, i) => ({
+        phase: i / 16,
+        spreadX: ((i * 19) % 17 - 8) / 34,
+        spreadZ: ((i * 29) % 17 - 8) / 38,
+        color: i % 2 ? '#8a5a3c' : '#4a332a',
       })),
+    [],
+  )
+
+  const sparkParticles = useMemo(
+    () => Array.from({ length: 14 }, (_, i) => ({
+      phase: i / 14,
+      spreadX: ((i * 31) % 19 - 9) / 70,
+      spreadZ: ((i * 13) % 19 - 9) / 75,
+    })),
     [],
   )
 
@@ -51,7 +62,8 @@ export function RocketThrust() {
         const fade = 1 - progress
 
         mesh.position.x = p.spreadX * (0.2 + progress * 0.9) + Math.sin(t * 25 + index) * 0.015
-        mesh.position.y = -0.28 - progress * 0.65
+        // The parent flame group is rotated so positive local Y points down.
+        mesh.position.y = 0.28 + progress * 0.65
         mesh.position.z = p.spreadZ * (0.2 + progress * 0.9) + Math.cos(t * 25 + index) * 0.015
 
         const scale = p.size * (0.5 + fade * 0.9)
@@ -67,7 +79,7 @@ export function RocketThrust() {
         const fade = 1 - progress
 
         mesh.position.x = p.spreadX * (0.5 + progress * 1.5)
-        mesh.position.y = -0.55 - progress * 0.95
+        mesh.position.y = 0.55 + progress * 0.95
         mesh.position.z = p.spreadZ * (0.5 + progress * 1.5)
 
         const scale = 0.06 * (0.4 + progress * 1.8)
@@ -75,26 +87,69 @@ export function RocketThrust() {
         mesh.material.opacity = fade * 0.65
       })
     }
+
+    if (sparkGroup.current) {
+      sparkGroup.current.children.forEach((mesh, index) => {
+        const p = sparkParticles[index]
+        const progress = (t * 6.5 + p.phase) % 1
+        const fade = 1 - progress
+        mesh.position.x = p.spreadX * (0.3 + progress * 1.4) + Math.sin(t * 30 + index) * 0.018
+        mesh.position.y = 0.18 + progress * 0.9
+        mesh.position.z = p.spreadZ * (0.3 + progress * 1.4) + Math.cos(t * 27 + index) * 0.018
+        mesh.scale.setScalar(0.018 + fade * 0.025)
+        mesh.material.opacity = fade
+      })
+    }
+
+    if (flameLight.current) {
+      flameLight.current.intensity = 1.1 + Math.sin(t * 34) * 0.25 + Math.sin(t * 17) * 0.15
+    }
   })
 
   return (
     <group>
-      {/* Fiery & Plasma Plume */}
+      <pointLight ref={flameLight} color="#ff6b1a" intensity={1.2} distance={2.4} decay={2} />
+
+      {/* Fiery & plasma plume */}
       <group ref={flameGroup}>
         {flameParticles.map((p, i) => (
           <mesh key={`f-${i}`}>
             <sphereGeometry args={[1, 6, 5]} />
-            <meshBasicMaterial color={p.color} transparent opacity={0.9} toneMapped={false} />
+            <meshBasicMaterial
+              color={p.color}
+              transparent
+              opacity={0.9}
+              blending={AdditiveBlending}
+              depthWrite={false}
+              toneMapped={false}
+            />
           </mesh>
         ))}
       </group>
 
-      {/* Billowing Smoke Puffs */}
+      {/* Billowing exhaust smoke */}
       <group ref={smokeGroup}>
         {smokeParticles.map((p, i) => (
           <mesh key={`s-${i}`}>
             <sphereGeometry args={[1, 6, 5]} />
-            <meshBasicMaterial color={p.color} transparent opacity={0.6} />
+            <meshBasicMaterial color={p.color} transparent opacity={0.6} depthWrite={false} />
+          </mesh>
+        ))}
+      </group>
+
+      {/* Fast, bright exhaust sparks */}
+      <group ref={sparkGroup}>
+        {sparkParticles.map((p, i) => (
+          <mesh key={`p-${i}`}>
+            <octahedronGeometry args={[1, 0]} />
+            <meshBasicMaterial
+              color={i % 2 ? '#fff3a3' : '#ff8c32'}
+              transparent
+              opacity={0.9}
+              blending={AdditiveBlending}
+              depthWrite={false}
+              toneMapped={false}
+            />
           </mesh>
         ))}
       </group>
