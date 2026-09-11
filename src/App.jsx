@@ -8,7 +8,7 @@ import CatModel from './components/CatModel'
 import LampModel from './components/LampModel'
 import MousetrapModel from './components/MousetrapModel'
 import YarnModel from './components/YarnModel'
-import MilkModel from './components/MilkModel'
+import MilkModel, { MILK_MODEL_CENTER_OFFSET } from './components/MilkModel'
 import CheeseModel from './components/CheeseModel'
 import MagnetModel from './components/MagnetModel'
 import { BookArchObstacle } from './components/BookModel'
@@ -463,12 +463,7 @@ function Yarn({ position, obstacleRef }) {
 }
 
 function MilkBowl({ position, obstacleRef }) {
-  return (
-    <mesh ref={obstacleRef} position={[position[0], position[1] + 0.1, position[2]]} castShadow receiveShadow>
-      <cylinderGeometry args={[0.3, 0.2, 0.2, 8]} />
-      <meshStandardMaterial color="#ffffff" flatShading />
-    </mesh>
-  )
+  return <MilkModel position={position} obstacleRef={obstacleRef} />
 }
 
 function MagnetPickup({ position, obstacleRef }) {
@@ -529,7 +524,14 @@ function Obstacle({ type, position, obstacleRef }) {
     )
   }
 
-  if (type === 'milk') return <MilkModel position={position} obstacleRef={obstacleRef} />
+  if (type === 'milk') {
+    return (
+      <mesh ref={obstacleRef} position={[position[0], position[1] + 0.02, position[2]]} rotation={[-Math.PI / 2, 0, 0]} castShadow receiveShadow>
+        <planeGeometry args={[1.5, 1.2]} />
+        <meshStandardMaterial color={materials.milk} flatShading />
+      </mesh>
+    )
+  }
 
   if (type === 'mousetrap') {
     return (
@@ -601,7 +603,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
       const y = item.type === 'yarn'
         ? GROUND_Y + 0.5
         : item.type === 'milkBowl'
-          ? GROUND_Y + 0.1
+          ? GROUND_Y + MILK_MODEL_CENTER_OFFSET
           : item.type === 'milk'
             ? GROUND_Y + 0.02
             : item.type === 'magnet'

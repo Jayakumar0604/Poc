@@ -4,7 +4,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 const MODEL_URL = '/models/low_poly_milk/scene.gltf'
 const MODEL_SCALE = 10
-const MODEL_BASE_OFFSET = 0.0451 * MODEL_SCALE
+export const MILK_MODEL_CENTER_OFFSET = 0.0451 * MODEL_SCALE
 
 let cachedModel = null
 let loadPromise = null
@@ -50,9 +50,8 @@ function loadMilkGltf() {
 }
 
 /**
- * Low-poly milk carton normalized to the existing obstacle footprint.
- * The outer group remains at the obstacle's ground position so the obstacle
- * manager can continue moving it without affecting the model's base offset.
+ * Low-poly milk carton used by the milk booster. Its outer pivot is placed at
+ * the model center so the obstacle manager can move it along the track.
  */
 export default function MilkModel({ position, obstacleRef }) {
   const [model, setModel] = useState(() => cachedModel)
@@ -70,9 +69,9 @@ export default function MilkModel({ position, obstacleRef }) {
   return (
     <group
       ref={attachMilk}
-      position={[position[0], position[1] + 0.02, position[2]]}
+      position={[position[0], position[1] + MILK_MODEL_CENTER_OFFSET, position[2]]}
     >
-      <group position={[0, MODEL_BASE_OFFSET, 0]} scale={MODEL_SCALE}>
+      <group scale={MODEL_SCALE}>
         <primitive object={clonedScene} />
       </group>
     </group>
