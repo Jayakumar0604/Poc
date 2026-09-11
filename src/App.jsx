@@ -7,6 +7,8 @@ import ThreeMenuCanvas from './components/ThreeMenuScene'
 import CatModel from './components/CatModel'
 import LampModel from './components/LampModel'
 import MousetrapModel from './components/MousetrapModel'
+import YarnModel from './components/YarnModel'
+import MilkModel from './components/MilkModel'
 import CheeseModel from './components/CheeseModel'
 import MagnetModel from './components/MagnetModel'
 import { BookArchObstacle } from './components/BookModel'
@@ -457,22 +459,7 @@ function Cat({ catRef, playerRef, playerStats, active, isCaught }) {
 }
 
 function Yarn({ position, obstacleRef }) {
-  const ref = useRef()
-  useFrame((state, delta) => {
-    if (!ref.current) return
-    const t = state.clock.elapsedTime
-    ref.current.rotation.x += delta * 7
-    ref.current.rotation.z = Math.sin(t * 6) * 0.18
-    ref.current.rotation.y += delta * 1.5
-    ref.current.position.y = position[1] + 0.5 + Math.abs(Math.sin(t * 14)) * 0.06
-  })
-
-  return (
-    <mesh ref={(node) => { ref.current = node; obstacleRef(node) }} position={[position[0], position[1] + 0.5, position[2]]} castShadow receiveShadow>
-      <sphereGeometry args={[0.5, 8, 6]} />
-      <meshStandardMaterial color="#d64545" flatShading />
-    </mesh>
-  )
+  return <YarnModel position={position} obstacleRef={obstacleRef} />
 }
 
 function MilkBowl({ position, obstacleRef }) {
@@ -542,14 +529,7 @@ function Obstacle({ type, position, obstacleRef }) {
     )
   }
 
-  if (type === 'milk') {
-    return (
-      <mesh ref={obstacleRef} position={[position[0], position[1] + 0.02, position[2]]} rotation={[-Math.PI / 2, 0, 0]} castShadow receiveShadow>
-        <planeGeometry args={[1.5, 1.2]} />
-        <meshStandardMaterial color={materials.milk} flatShading />
-      </mesh>
-    )
-  }
+  if (type === 'milk') return <MilkModel position={position} obstacleRef={obstacleRef} />
 
   if (type === 'mousetrap') {
     return (
