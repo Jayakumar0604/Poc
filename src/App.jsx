@@ -13,6 +13,10 @@ import CheeseModel from './components/CheeseModel'
 import MagnetModel from './components/MagnetModel'
 import RocketModel from './components/RocketModel'
 import { BookObstacle, BOOK_MODEL_CENTER_OFFSET } from './components/BookModel'
+import ParticleEffects from './components/ParticleEffects'
+import { particleEmitter } from './utils/particleEmitter'
+import AtmosphericParticles from './components/AtmosphericParticles'
+import { RocketThrust, FlightSpeedStreaks, MagnetFluxParticles, CatChaseAura } from './components/SpecialEffects'
 
 const KEY = 'endless-runner-high-score'
 const FPS_KEY = 'show-fps-counter'
@@ -251,43 +255,6 @@ function MenuDecor() {
   )
 }
 
-function RocketThrust() {
-  const particlesRef = useRef()
-  const particles = useMemo(
-    () => Array.from({ length: 12 }, (_, index) => ({
-      phase: index / 12,
-      spread: ((index * 17) % 9 - 4) / 40,
-      depth: ((index * 11) % 7 - 3) / 45,
-    })),
-    [],
-  )
-
-  useFrame((state) => {
-    if (!particlesRef.current) return
-    particlesRef.current.children.forEach((particle, index) => {
-      const data = particles[index]
-      const progress = (state.clock.elapsedTime * 2.8 + data.phase) % 1
-      const fade = 1 - progress
-      particle.position.x = data.spread * (0.35 + progress)
-      particle.position.y = -0.32 - progress * 0.52
-      particle.position.z = data.depth * (0.35 + progress)
-      particle.scale.setScalar(0.45 + fade * 0.8)
-      particle.material.opacity = fade * 0.9
-    })
-  })
-
-  return (
-    <group ref={particlesRef}>
-      {particles.map((particle, index) => (
-        <mesh key={index}>
-          <sphereGeometry args={[0.045, 6, 4]} />
-          <meshBasicMaterial color={index % 2 ? '#ffd34e' : '#ff6b1a'} transparent opacity={0.8} />
-        </mesh>
-      ))}
-    </group>
-  )
-}
-
 function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActive = false, flightModeRef }) {
   const mouseRef = useRef()
   const tailRef = useRef()
@@ -298,6 +265,7 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActiv
   const landSquash = useRef(1)
   const wasRocketActive = useRef(false)
   const recoveringFromFlight = useRef(false)
+  const stepTimer = useRef(0)
 
   const attachMouse = useCallback((node) => {
     mouseRef.current = node
@@ -402,6 +370,7 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActiv
         velocity.current = 0
         grounded.current = true
         landSquash.current = 0.72 // Squash on landing impact
+        particleEmitter.emitLandShockwave(player.position.x, MOUSE_GROUND_Y, player.position.z)
       }
     }
 
@@ -435,6 +404,20 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActiv
       player.rotation.z = bankZ + gallop * 0.08
       player.rotation.x = 0.04 + Math.max(0, gallop) * 0.05
       player.rotation.y = yawY
+
+      if (grounded.current && active && !cinematic) {
+        stepTimer.current += delta
+        if (stepTimer.current > (ducking.current ? 0.07 : 0.15)) {
+          stepTimer.current = 0
+          particleEmitter.emitDustPuff(
+            player.position.x,
+            MOUSE_GROUND_Y - 0.1,
+            player.position.z + 0.16,
+            ducking.current ? 1.3 : 0.8,
+            ducking.current ? 4 : 2,
+          )
+        }
+      }
     }
 
     // Reactive tail whip
@@ -481,6 +464,7 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActiv
             <ringGeometry args={[0.32, 0.44, 24]} />
             <meshBasicMaterial color="#38bdf8" transparent opacity={0.65} />
           </mesh>
+          <MagnetFluxParticles />
         </group>
       )}
       {rocketActive && (
@@ -502,6 +486,8 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActiv
 
 function Cat({ catRef, playerRef, playerStats, active, isCaught }) {
   const startTime = useRef(null)
+  const lastGallop = useRef(0)
+  const chaseActive = useRef(false)
 
   useEffect(() => {
     if (!active) {
@@ -531,6 +517,7 @@ function Cat({ catRef, playerRef, playerStats, active, isCaught }) {
       cat.scale.set(1.05, 0.9, 1.25)
     } else {
       const chase = playerStats.current.hits === 1
+      chaseActive.current = chase
       const visible = chase || elapsed < 4.0
       const targetZ = chase ? mouse.z + 0.85 : visible ? mouse.z + 1.1 : mouse.z + 15
       cat.visible = visible
@@ -547,12 +534,19 @@ function Cat({ catRef, playerRef, playerStats, active, isCaught }) {
       cat.rotation.y = Math.PI - swerve * 0.18
       cat.position.y = CAT_GROUND_Y + Math.max(0, gallop) * 0.18
       cat.scale.set(1 - gallop * 0.04, 1 + gallop * 0.06, 1 + gallop * 0.03)
+
+      // Heavy paw stomp dust when landing bounding strides
+      if (visible && gallop < -0.75 && lastGallop.current >= -0.75) {
+        particleEmitter.emitDustPuff(cat.position.x, CAT_GROUND_Y - 0.48, cat.position.z + 0.15, 1.8, 3)
+      }
+      lastGallop.current = gallop
     }
   })
 
   return (
     <group ref={catRef} position={[0, CAT_GROUND_Y, 1.1]} visible={active || isCaught}>
       <CatModel position={[0, -0.55, 0]} scale={0.0022} rotation={[0, 0, 0]} />
+      <CatChaseAura playerStats={playerStats} />
     </group>
   )
 }
@@ -769,8 +763,13 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, magnetActive,
         ref.current.rotation.x += delta * 7
         ref.current.rotation.z += delta * 5
 
+        if (Math.random() > 0.4) {
+          particleEmitter.emitMagnetTrail(posX.current, posY.current, posZ.current)
+        }
+
         if (dist < 1.15 || (Math.abs(dx) < 0.9 && Math.abs(dy) < 0.9 && Math.abs(dz) < 1.1)) {
           collected.current = true
+          particleEmitter.emitCheeseBurst(posX.current, posY.current, posZ.current, coin.superCoin)
           onCollect(coin.id, coin.value)
           return
         }
@@ -809,6 +808,7 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, magnetActive,
         Math.abs(posZ.current - p.z) < 1.1
       ) {
         collected.current = true
+        particleEmitter.emitCheeseBurst(posX.current, posY.current, posZ.current, coin.superCoin)
         onCollect(coin.id, coin.value)
         return
       }
@@ -1046,18 +1046,21 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       const hitX = Math.abs(px - ox) < 0.4
       const hitZ = Math.abs(pz - oz) < 0.4
       const pickupHit = Math.abs(px - ox) < 0.75 && Math.abs(pz - oz) < 0.85
-      if (obstacle.type === 'milkBowl' && pickupHit) {
+      if (obstacle.type === 'milk' && pickupHit) {
+        particleEmitter.emitPowerupPickup(player.current.position.x, player.current.position.y + 0.3, player.current.position.z, 'milk')
         playerStats.current.invincibleUntil = state.clock.elapsedTime + 5
         obstacle.z = 2
         onMilk()
         continue
       }
       if (obstacle.type === 'magnet' && pickupHit) {
+        particleEmitter.emitPowerupPickup(player.current.position.x, player.current.position.y + 0.3, player.current.position.z, 'magnet')
         obstacle.z = 2
         onMagnet()
         continue
       }
       if (obstacle.type === 'rocket' && pickupHit) {
+        particleEmitter.emitPowerupPickup(player.current.position.x, player.current.position.y + 0.3, player.current.position.z, 'rocket')
         obstacle.z = 2
         onRocket()
         continue
@@ -1069,6 +1072,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       const collision = hitX && hitZ && (hitJumpObject || hitOverhead)
 
       if (collision && state.clock.elapsedTime - playerStats.current.lastHitTime > 1.5) {
+        particleEmitter.emitImpactBurst(player.current.position.x, player.current.position.y + 0.25, player.current.position.z, obstacle.type)
         playerStats.current.lastHitTime = state.clock.elapsedTime
         obstacle.z = 2
         if (obstacle.type !== 'mousetrap') playerStats.current.hits += 1
@@ -1086,6 +1090,9 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       <SideScenery active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
       <Environment active={active && !isPaused && !isCaught} speedRef={currentSpeed} />
       {cinematic && <MenuDecor />}
+      <AtmosphericParticles active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
+      <ParticleEffects active={active && !isPaused} />
+      <FlightSpeedStreaks active={rocketActive} />
       <Mouse
         playerRef={player}
         active={active && !isPaused && !isCaught}
