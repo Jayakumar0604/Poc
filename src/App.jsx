@@ -12,7 +12,6 @@ import YarnModel from './components/YarnModel'
 import MilkModel, { MILK_MODEL_CENTER_OFFSET } from './components/MilkModel'
 import VacuumRobot from './components/VacuumRobot'
 import CheeseModel from './components/CheeseModel'
-import InstancedCheese from './components/InstancedCheese'
 import MagnetModel from './components/MagnetModel'
 import RocketModel from './components/RocketModel'
 import { BookObstacle, BOOK_MODEL_CENTER_OFFSET } from './components/BookModel'
@@ -40,7 +39,6 @@ const MOVING_TYPES = ['mousetrap', 'yarn', 'vacuum', 'mousetrap', 'yarn', 'book'
 const MIN_OBJECT_GAP = 8
 const OBSTACLE_SPAWN_GAP = 5.5
 const INITIAL_CHEESE_REQUESTS = 4
-const OBSTACLE_POOL_SIZE = 9
 const chooseSpawnType = () => {
   const rand = Math.random()
   if (rand > 0.4) return 'obstacle'
@@ -743,8 +741,7 @@ function Obstacle({ type, position, obstacleRef, onRocket, highQuality }) {
 
 function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, cheeseRequests, onRocket, highQuality }) {
   const items = useMemo(
-    // Fixed obstacle slots act as a pool; respawns recycle these entries.
-    () => Array.from({ length: OBSTACLE_POOL_SIZE }, (_, i) => {
+    () => Array.from({ length: 9 }, (_, i) => {
       if (i === 1) return { type: 'magnet', x: LANES[1], z: -24 }
       if (i === 4) return { type: 'rocket', x: LANES[2], z: -60 }
       const type = i % 2 ? OVERHEAD_TYPES[i % OVERHEAD_TYPES.length] : MOVING_TYPES[i % MOVING_TYPES.length]
@@ -825,8 +822,6 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
   ))
 }
 
-// Legacy single-mesh behavior retained as a reference; active rendering uses InstancedCheese.
-// oxlint-disable-next-line no-unused-vars
 function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, magnetActive, onCollect, onRemove, onMove }) {
   const ref = useRef()
   const posX = useRef(coin.x)
@@ -1060,9 +1055,10 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, 
     timer.current = rocketActive ? 0.3 : 0.5
   })
 
-  return (
-    <InstancedCheese
-      coins={coins}
+  return coins.map((coin) => (
+    <Cheese
+      key={coin.id}
+      coin={coin}
       active={active}
       playerRef={playerRef}
       speedRef={speedRef}
@@ -1072,7 +1068,7 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, 
       onRemove={remove}
       onMove={(id, x, z) => positions.current.set(id, { x, z })}
     />
-  )
+  ))
 }
 
 function KitchenProps() {

@@ -22,20 +22,20 @@ export function RocketThrust() {
 
   const flameParticles = useMemo(
     () =>
-      Array.from({ length: 14 }, (_, i) => ({
-        phase: i / 14,
+      Array.from({ length: 24 }, (_, i) => ({
+        phase: i / 24,
         spreadX: ((i * 17) % 15 - 7) / 52,
         spreadZ: ((i * 23) % 15 - 7) / 58,
-        color: i < 5 ? '#ffffff' : i < 10 ? '#ffe066' : '#ff4d00',
-        size: i < 5 ? 0.06 : 0.085,
+        color: i < 8 ? '#ffffff' : i < 16 ? '#ffe066' : '#ff4d00',
+        size: i < 8 ? 0.045 : 0.065,
       })),
     [],
   )
 
   const smokeParticles = useMemo(
     () =>
-      Array.from({ length: 10 }, (_, i) => ({
-        phase: i / 10,
+      Array.from({ length: 16 }, (_, i) => ({
+        phase: i / 16,
         spreadX: ((i * 19) % 17 - 8) / 34,
         spreadZ: ((i * 29) % 17 - 8) / 38,
         color: i % 2 ? '#8a5a3c' : '#4a332a',
@@ -44,8 +44,8 @@ export function RocketThrust() {
   )
 
   const sparkParticles = useMemo(
-    () => Array.from({ length: 8 }, (_, i) => ({
-      phase: i / 8,
+    () => Array.from({ length: 14 }, (_, i) => ({
+      phase: i / 14,
       spreadX: ((i * 31) % 19 - 9) / 70,
       spreadZ: ((i * 13) % 19 - 9) / 75,
     })),
@@ -82,9 +82,9 @@ export function RocketThrust() {
         mesh.position.y = 0.55 + progress * 0.95
         mesh.position.z = p.spreadZ * (0.5 + progress * 1.5)
 
-        const scale = 0.075 * (0.4 + progress * 1.8)
+        const scale = 0.06 * (0.4 + progress * 1.8)
         mesh.scale.setScalar(scale)
-        mesh.material.opacity = fade * 0.58
+        mesh.material.opacity = fade * 0.65
       })
     }
 
