@@ -97,6 +97,23 @@ export default function BookModel({
   )
 }
 
+export const BOOK_MODEL_CENTER_OFFSET = 0.14
+
+/**
+ * 3D Ground Book Hurdle Obstacle
+ * Rests flat on the carpet floor across the lane as a jumpable obstacle.
+ */
+export function BookObstacle({ position, obstacleRef }) {
+  return (
+    <group ref={obstacleRef} position={position}>
+      <BookModel
+        scale={[0.0048, 0.004, 0.0044]}
+        rotation={[0, 0.12, 0]}
+      />
+    </group>
+  )
+}
+
 /**
  * Composite overhead obstacle constructed from realistic 3D books:
  * - Left upright book pillar

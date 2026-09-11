@@ -11,7 +11,7 @@ import YarnModel from './components/YarnModel'
 import MilkModel, { MILK_MODEL_CENTER_OFFSET } from './components/MilkModel'
 import CheeseModel from './components/CheeseModel'
 import MagnetModel from './components/MagnetModel'
-import { BookArchObstacle } from './components/BookModel'
+import { BookObstacle, BOOK_MODEL_CENTER_OFFSET } from './components/BookModel'
 
 const KEY = 'endless-runner-high-score'
 const FPS_KEY = 'show-fps-counter'
@@ -22,8 +22,8 @@ const GROUND_Y = -0.57
 const MOUSE_GROUND_Y = GROUND_Y + 0.2
 const CAT_GROUND_Y = GROUND_Y + 0.55
 const CHEESE_GROUND_Y = GROUND_Y + 0.3
-const OVERHEAD_TYPES = ['table', 'book', 'pencils']
-const MOVING_TYPES = ['milk', 'mousetrap', 'yarn']
+const OVERHEAD_TYPES = ['table', 'pencils']
+const MOVING_TYPES = ['milk', 'mousetrap', 'yarn', 'book']
 const MIN_OBJECT_GAP = 10
 const INITIAL_CHEESE_REQUESTS = 4
 const chooseSpawnType = () => {
@@ -518,13 +518,7 @@ function Obstacle({ type, position, obstacleRef }) {
     )
   }
 
-  if (type === 'book') {
-    return (
-      <group ref={obstacleRef} position={position}>
-        <BookArchObstacle />
-      </group>
-    )
-  }
+  if (type === 'book') return <BookObstacle position={position} obstacleRef={obstacleRef} />
 
   if (type === 'milk') {
     return (
@@ -610,7 +604,9 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
             ? GROUND_Y + 0.02
             : item.type === 'magnet'
               ? GROUND_Y + 0.35
-              : GROUND_Y
+              : item.type === 'book'
+                ? GROUND_Y + BOOK_MODEL_CENTER_OFFSET
+                : GROUND_Y
       if (mesh) mesh.position.set(item.x, y, item.z)
     })
   })
@@ -949,7 +945,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         continue
       }
       if (invincibleTime > 0 || playerStats.current.invincibleUntil > state.clock.elapsedTime) continue
-      const hitJumpObject = ['milk', 'mousetrap'].includes(obstacle.type) && player.current.position.y < 0.5
+      const hitJumpObject = ['milk', 'mousetrap', 'book'].includes(obstacle.type) && player.current.position.y < 0.5
       const hitOverhead = OVERHEAD_TYPES.includes(obstacle.type) && player.current.scale.y > 0.6
       const collision = hitX && hitZ && (hitJumpObject || hitOverhead || obstacle.type === 'yarn')
 
