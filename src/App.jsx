@@ -15,7 +15,9 @@ import { BookArchObstacle } from './components/BookModel'
 
 const KEY = 'endless-runner-high-score'
 const FPS_KEY = 'show-fps-counter'
-const LANES = [-1.5, 0, 1.5]
+const LANE_STEP = 2.4
+const LANES = [-LANE_STEP, 0, LANE_STEP]
+const randomLane = () => LANES[Math.floor(Math.random() * LANES.length)]
 const GROUND_Y = -0.57
 const MOUSE_GROUND_Y = GROUND_Y + 0.2
 const CAT_GROUND_Y = GROUND_Y + 0.55
@@ -289,7 +291,7 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false }) {
       }
       if (['a', 'd', 'arrowleft', 'arrowright'].includes(key)) {
         const direction = key === 'a' || key === 'arrowleft' ? -1 : 1
-        targetX.current = Math.max(-2.4, Math.min(2.4, targetX.current + direction * 2.4))
+        targetX.current = Math.max(LANES[0], Math.min(LANES[2], targetX.current + direction * LANE_STEP))
       }
     }
     const stopDuck = (event) => {
@@ -585,7 +587,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
           [...coinPositions.current.values()].some((coin) => Math.abs(coin.z - z) < MIN_OBJECT_GAP)
         ) z -= MIN_OBJECT_GAP
         item.z = z
-        item.x = LANES[Math.floor(Math.random() * LANES.length)]
+        item.x = randomLane()
         const type = chooseSpawnType()
         if (type === 'cheese') {
           item.type = 'empty'
@@ -724,7 +726,7 @@ function makeCoinLine(obstacles, positions, nextId, coinsSpawned, playerRef, sta
   const count = startDistance === 80 ? 3 + Math.floor(Math.random() * 2) : 3
   const startZ = playerRef.current.position.z - startDistance - Math.random() * (startDistance === 80 ? 20 : 4)
   const zValues = Array.from({ length: count }, (_, i) => startZ - i * MIN_OBJECT_GAP)
-  const lane = LANES[Math.floor(Math.random() * LANES.length)]
+  const lane = randomLane()
   if (!zValues.every((z) => coinFits(z, lane, obstacles, positions))) return []
   return zValues.map((z) => {
     const superCoin = coinsSpawned.current++ % 11 === 10
