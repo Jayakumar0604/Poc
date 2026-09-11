@@ -8,6 +8,7 @@ import CatModel from './components/CatModel'
 import LampModel from './components/LampModel'
 import MousetrapModel from './components/MousetrapModel'
 import CheeseModel from './components/CheeseModel'
+import MagnetModel from './components/MagnetModel'
 import { BookArchObstacle } from './components/BookModel'
 
 const KEY = 'endless-runner-high-score'
@@ -23,7 +24,10 @@ const MIN_OBJECT_GAP = 10
 const INITIAL_CHEESE_REQUESTS = 4
 const chooseSpawnType = () => {
   const rand = Math.random()
-  return rand > 0.4 ? 'obstacle' : (rand > 0.05 ? 'cheese' : 'milk')
+  if (rand > 0.45) return 'obstacle'
+  if (rand > 0.14) return 'cheese'
+  if (rand > 0.07) return 'milk'
+  return 'magnet'
 }
 const DIFFICULTIES = {
   Easy: { baseSpeed: 3, maxSpeed: 12 },
@@ -240,7 +244,7 @@ function MenuDecor() {
   )
 }
 
-function Mouse({ playerRef, active, cinematic }) {
+function Mouse({ playerRef, active, cinematic, magnetActive = false }) {
   const mouseRef = useRef()
   const tailRef = useRef()
   const velocity = useRef(0)
@@ -388,6 +392,15 @@ function Mouse({ playerRef, active, cinematic }) {
         <cylinderGeometry args={[0.015, 0.015, 0.6]} />
         <meshStandardMaterial color="#555" flatShading />
       </mesh>
+      {magnetActive && (
+        <group position={[0, 0.46, -0.05]}>
+          <MagnetModel scale={0.55} hasAura={false} />
+          <mesh rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.32, 0.44, 24]} />
+            <meshBasicMaterial color="#38bdf8" transparent opacity={0.65} />
+          </mesh>
+        </group>
+      )}
     </group>
   )
 }
@@ -471,6 +484,25 @@ function MilkBowl({ position, obstacleRef }) {
   )
 }
 
+function MagnetPickup({ position, obstacleRef }) {
+  const spinRef = useRef()
+
+  useFrame((state, delta) => {
+    if (!spinRef.current) return
+    const t = state.clock.elapsedTime
+    spinRef.current.rotation.y += delta * 3.2
+    spinRef.current.position.y = Math.sin(t * 3.5) * 0.08
+  })
+
+  return (
+    <group ref={obstacleRef} position={position}>
+      <group ref={spinRef}>
+        <MagnetModel scale={1.2} />
+      </group>
+    </group>
+  )
+}
+
 function Obstacle({ type, position, obstacleRef }) {
   const materials = useMemo(() => ({
     milk: '#fff7e6',
@@ -483,6 +515,7 @@ function Obstacle({ type, position, obstacleRef }) {
   if (type === 'empty') return null
   if (type === 'yarn') return <Yarn position={position} obstacleRef={obstacleRef} />
   if (type === 'milkBowl') return <MilkBowl position={position} obstacleRef={obstacleRef} />
+  if (type === 'magnet') return <MagnetPickup position={position} obstacleRef={obstacleRef} />
 
   if (type === 'pencils') {
     return (
@@ -545,6 +578,7 @@ function Obstacle({ type, position, obstacleRef }) {
 function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, cheeseRequests }) {
   const items = useMemo(
     () => Array.from({ length: 9 }, (_, i) => {
+      if (i === 1) return { type: 'magnet', x: LANES[1], z: -24 }
       const type = i % 2 ? OVERHEAD_TYPES[i % OVERHEAD_TYPES.length] : MOVING_TYPES[i % MOVING_TYPES.length]
       return { type, x: LANES[i % 3], z: -12 - i * 12 }
     }),
@@ -576,13 +610,23 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
           cheeseRequests.current += 1
         } else if (type === 'milk') {
           item.type = 'milkBowl'
+        } else if (type === 'magnet') {
+          item.type = 'magnet'
         } else {
           item.type = Math.random() < 0.5
             ? OVERHEAD_TYPES[Math.floor(Math.random() * OVERHEAD_TYPES.length)]
             : MOVING_TYPES[Math.floor(Math.random() * MOVING_TYPES.length)]
         }
       }
-      const y = item.type === 'yarn' ? GROUND_Y + 0.5 : item.type === 'milkBowl' ? GROUND_Y + 0.1 : item.type === 'milk' ? GROUND_Y + 0.02 : GROUND_Y
+      const y = item.type === 'yarn'
+        ? GROUND_Y + 0.5
+        : item.type === 'milkBowl'
+          ? GROUND_Y + 0.1
+          : item.type === 'milk'
+            ? GROUND_Y + 0.02
+            : item.type === 'magnet'
+              ? GROUND_Y + 0.35
+              : GROUND_Y
       if (mesh) mesh.position.set(item.x, y, item.z)
     })
   })
@@ -597,54 +641,93 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
   ))
 }
 
-function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, onCollect, onRemove, onMove }) {
+function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, magnetActive, onCollect, onRemove, onMove }) {
   const ref = useRef()
-  const z = useRef(coin.z)
+  const posX = useRef(coin.x)
+  const posY = useRef(coin.y)
+  const posZ = useRef(coin.z)
   const collected = useRef(false)
 
   useFrame((state, delta) => {
     if (!active || collected.current || !ref.current) return
-    z.current += delta * speedRef.current
-    onMove(coin.id, coin.x, z.current)
-
+    const p = playerRef.current ? playerRef.current.position : null
     const t = state.clock.elapsedTime
-    const floatY = coin.y + Math.sin(t * 3.5 + coin.id * 1.5) * 0.08
 
-    ref.current.rotation.y += delta * 2.8
-    ref.current.rotation.x = Math.sin(t * 2.5 + coin.id) * 0.12
-    ref.current.rotation.z = Math.cos(t * 2.0 + coin.id) * 0.08
-    ref.current.position.set(coin.x, floatY, z.current)
+    let isPulled = false
+
+    if (magnetActive && p && posZ.current < p.z + 2) {
+      const targetY = p.y + 0.2
+      const dx = p.x - posX.current
+      const dy = targetY - posY.current
+      const dz = p.z - posZ.current
+      const dist = Math.hypot(dx, dy, dz)
+
+      if (dist < 45) {
+        isPulled = true
+        // Accelerate attraction speed as cheese gets closer
+        const pullSpeed = Math.min(42, Math.max(18, 22 + (30 - Math.min(30, dist)) * 1.1))
+        const step = pullSpeed * delta
+        const invDist = dist > 0.001 ? 1 / dist : 1
+
+        posX.current += dx * invDist * step
+        posY.current += dy * invDist * step
+        posZ.current += dz * invDist * step + delta * speedRef.current * 0.4
+
+        ref.current.rotation.y += delta * 14
+        ref.current.rotation.x += delta * 7
+        ref.current.rotation.z += delta * 5
+
+        if (dist < 1.15 || (Math.abs(dx) < 0.9 && Math.abs(dy) < 0.9 && Math.abs(dz) < 1.1)) {
+          collected.current = true
+          onCollect(coin.id, coin.value)
+          return
+        }
+      }
+    }
+
+    if (!isPulled) {
+      posZ.current += delta * speedRef.current
+      posY.current = coin.y + Math.sin(t * 3.5 + coin.id * 1.5) * 0.08
+
+      ref.current.rotation.y += delta * 2.8
+      ref.current.rotation.x = Math.sin(t * 2.5 + coin.id) * 0.12
+      ref.current.rotation.z = Math.cos(t * 2.0 + coin.id) * 0.08
+
+      if (posZ.current > 6) {
+        collected.current = true
+        onRemove(coin.id)
+        return
+      }
+
+      const blocked = obstaclesRef.current.some(
+        (obstacle) =>
+          Math.abs(obstacle.x - posX.current) < 0.9 &&
+          Math.abs(obstacle.z - posZ.current) < 0.9,
+      )
+      if (blocked) {
+        collected.current = true
+        onRemove(coin.id)
+        return
+      }
+
+      if (
+        p &&
+        Math.abs(posX.current - p.x) < 0.9 &&
+        Math.abs(posY.current - p.y) < 1 &&
+        Math.abs(posZ.current - p.z) < 1.1
+      ) {
+        collected.current = true
+        onCollect(coin.id, coin.value)
+        return
+      }
+    }
+
+    onMove(coin.id, posX.current, posZ.current)
+    ref.current.position.set(posX.current, posY.current, posZ.current)
 
     if (coin.superCoin) {
       const pulse = 1 + Math.sin(t * 6) * 0.08
       ref.current.scale.set(pulse, pulse, pulse)
-    }
-
-    if (z.current > 6) {
-      collected.current = true
-      onRemove(coin.id)
-      return
-    }
-
-    const blocked = obstaclesRef.current.some(
-      (obstacle) =>
-        Math.abs(obstacle.x - coin.x) < 0.9 &&
-        Math.abs(obstacle.z - z.current) < 0.9,
-    )
-    if (blocked) {
-      collected.current = true
-      onRemove(coin.id)
-      return
-    }
-
-    const p = playerRef.current.position
-    if (
-      Math.abs(coin.x - p.x) < 0.9 &&
-      Math.abs(floatY - p.y) < 1 &&
-      Math.abs(z.current - p.z) < 1.1
-    ) {
-      collected.current = true
-      onCollect(coin.id, coin.value)
     }
   })
 
@@ -674,7 +757,7 @@ function makeCoinLine(obstacles, positions, nextId, coinsSpawned, playerRef, sta
   })
 }
 
-function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, cheeseRequests, onCoin }) {
+function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, cheeseRequests, magnetActive, onCoin }) {
   const [coins, setCoins] = useState([])
   const live = useRef([])
   const positions = positionsRef
@@ -714,6 +797,7 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, 
       playerRef={playerRef}
       speedRef={speedRef}
       obstaclesRef={obstaclesRef}
+      magnetActive={magnetActive}
       onCollect={(id, value) => { remove(id); onCoin(value) }}
       onRemove={remove}
       onMove={(id, x, z) => positions.current.set(id, { x, z })}
@@ -829,7 +913,7 @@ function Environment({ active, speedRef }) {
   )
 }
 
-function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseSpeed, maxSpeed, invincibleTime, showFps, onFps, onScore, onCaught, onMilk, onCoin }) {
+function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseSpeed, maxSpeed, invincibleTime, magnetActive, showFps, onFps, onScore, onCaught, onMilk, onMagnet, onCoin }) {
   const player = useRef()
   const cat = useRef()
   const obstacles = useRef([])
@@ -868,10 +952,16 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       const oz = obstacle.z
       const hitX = Math.abs(px - ox) < 0.4
       const hitZ = Math.abs(pz - oz) < 0.4
-      if (obstacle.type === 'milkBowl' && hitX && hitZ) {
+      const pickupHit = Math.abs(px - ox) < 0.75 && Math.abs(pz - oz) < 0.85
+      if (obstacle.type === 'milkBowl' && pickupHit) {
         playerStats.current.invincibleUntil = state.clock.elapsedTime + 5
         obstacle.z = 2
         onMilk()
+        continue
+      }
+      if (obstacle.type === 'magnet' && pickupHit) {
+        obstacle.z = 2
+        onMagnet()
         continue
       }
       if (invincibleTime > 0 || playerStats.current.invincibleUntil > state.clock.elapsedTime) continue
@@ -897,7 +987,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       <SideScenery active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
       <Environment active={active && !isPaused && !isCaught} speedRef={currentSpeed} />
       {cinematic && <MenuDecor />}
-      <Mouse playerRef={player} active={active && !isPaused && !isCaught} cinematic={cinematic} />
+      <Mouse playerRef={player} active={active && !isPaused && !isCaught} cinematic={cinematic} magnetActive={magnetActive} />
       <Cat catRef={cat} playerRef={player} playerStats={playerStats} active={active && !isPaused} isCaught={isCaught} />
       <Obstacles
         active={active && !isPaused}
@@ -914,6 +1004,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         playerRef={player}
         positionsRef={coinPositions}
         cheeseRequests={cheeseRequests}
+        magnetActive={magnetActive}
         onCoin={onCoin}
       />
     </>
@@ -943,7 +1034,7 @@ function HighScore({ score, onBack }) {
   )
 }
 
-function UIOverlay({ score, coinCount, fps, showFps, invincibleTime, isPaused, gameOver, onRestart, onMenu, onResume }) {
+function UIOverlay({ score, coinCount, fps, showFps, invincibleTime, magnetTime, isPaused, gameOver, onRestart, onMenu, onResume }) {
   return (
     <div className="font-cartoon pointer-events-none absolute inset-0 select-none">
       <div className="absolute left-5 top-5 rounded-xl border border-[#fed23a]/30 bg-[#321c13]/85 px-4 py-2 text-xs text-[#d8c3b0] shadow-lg backdrop-blur-sm">
@@ -954,7 +1045,21 @@ function UIOverlay({ score, coinCount, fps, showFps, invincibleTime, isPaused, g
         <span className="font-black text-[#ffbd38]">🧀 {coinCount}</span>
       </div>
       {showFps && <div className="absolute left-5 top-[4.5rem] rounded-xl border border-[#86efac]/30 bg-[#321c13]/85 px-3 py-1.5 text-xs font-black text-[#86efac] shadow-lg backdrop-blur-sm">{fps} FPS</div>}
-      {invincibleTime > 0 && <div className="absolute top-24 left-1/2 -translate-x-1/2 bg-blue-500 border-4 border-black text-white font-black text-3xl px-6 py-2 rounded-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-bounce">MILK POWER: {invincibleTime}s</div>}
+      
+      {/* Active Power-up Badges */}
+      <div className="absolute top-24 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2.5 pointer-events-none">
+        {invincibleTime > 0 && (
+          <div className="bg-blue-500 border-4 border-black text-white font-black text-2xl sm:text-3xl px-6 py-2 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-bounce flex items-center gap-2">
+            <span>🥛</span> MILK POWER: {invincibleTime}s
+          </div>
+        )}
+        {magnetTime > 0 && (
+          <div className="bg-gradient-to-r from-red-600 to-amber-500 border-4 border-black text-white font-black text-2xl sm:text-3xl px-6 py-2 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-pulse flex items-center gap-2">
+            <span>🧲</span> MAGNET: {magnetTime}s
+          </div>
+        )}
+      </div>
+
       {isPaused && !gameOver && (
         <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-[30px] border border-[#523326]/70 bg-[#3e261d] p-7 text-center text-white shadow-2xl">
@@ -1015,6 +1120,7 @@ export default function App() {
   const [fps, setFps] = useState(0)
   const [showFps, setShowFps] = useState(() => readFpsPreference())
   const [invincibleTime, setInvincibleTime] = useState(0)
+  const [magnetTime, setMagnetTime] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
   const [isCaught, setIsCaught] = useState(false)
   const [theme, setTheme] = useState('day')
@@ -1051,6 +1157,7 @@ export default function App() {
     setCoinCount(0)
     setFps(0)
     setInvincibleTime(3)
+    setMagnetTime(0)
     hits.current = 0
     setRun((value) => value + 1)
     setScreen('playing')
@@ -1085,6 +1192,12 @@ export default function App() {
     const timer = setInterval(() => setInvincibleTime((time) => Math.max(0, time - 1)), 1000)
     return () => clearInterval(timer)
   }, [invincibleTime])
+
+  useEffect(() => {
+    if (magnetTime <= 0) return undefined
+    const timer = setInterval(() => setMagnetTime((time) => Math.max(0, time - 1)), 1000)
+    return () => clearInterval(timer)
+  }, [magnetTime])
 
   if (screen === 'menu') {
     return (
@@ -1131,7 +1244,6 @@ export default function App() {
     )
   }
 
-
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-[#3b2117]">
       <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 3.5, 7], fov: 55 }}>
@@ -1145,11 +1257,13 @@ export default function App() {
           baseSpeed={settings.baseSpeed}
           maxSpeed={settings.maxSpeed}
           invincibleTime={invincibleTime}
+          magnetActive={magnetTime > 0}
           showFps={showFps}
           onFps={setFps}
           onScore={setScore}
           onCoin={(value) => setCoinCount((total) => total + value)}
           onMilk={() => setInvincibleTime(5)}
+          onMagnet={() => setMagnetTime(8)}
           onCaught={caught}
         />
         <EffectComposer multisampling={0} enableNormalPass>
@@ -1162,6 +1276,7 @@ export default function App() {
         fps={fps}
         showFps={showFps}
         invincibleTime={invincibleTime}
+        magnetTime={magnetTime}
         isPaused={isPaused}
         gameOver={screen === 'gameover'}
         onRestart={() => start(settings)}
