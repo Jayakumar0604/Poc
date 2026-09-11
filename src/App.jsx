@@ -26,7 +26,8 @@ const LANES = [-LANE_STEP, 0, LANE_STEP]
 const randomLane = () => LANES[Math.floor(Math.random() * LANES.length)]
 const GROUND_Y = -0.57
 const MOUSE_GROUND_Y = GROUND_Y + 0.2
-const FLIGHT_Y = GROUND_Y + 2.7
+// High enough for the mouse's full body to clear the tallest ground obstacle.
+const FLIGHT_Y = GROUND_Y + 3.0
 const CAT_GROUND_Y = GROUND_Y + 0.55
 const CHEESE_GROUND_Y = GROUND_Y + 0.3
 const CHEESE_AIRBORNE_Y = FLIGHT_Y + 0.1
