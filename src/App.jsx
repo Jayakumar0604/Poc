@@ -1384,7 +1384,7 @@ function HighScore({ score, onBack }) {
   )
 }
 
-function UIOverlay({ score, coinCount, fps, showFps, graphicsQuality, onToggleGraphicsQuality, invincibleTime, magnetTime, rocketTime, isPaused, gameOver, onRestart, onMenu, onResume }) {
+function UIOverlay({ score, coinCount, fps, showFps, soundEnabled, onToggleSound, graphicsQuality, onToggleGraphicsQuality, invincibleTime, magnetTime, rocketTime, isPaused, gameOver, onRestart, onMenu, onResume }) {
   return (
     <div className="font-cartoon pointer-events-none absolute inset-0 select-none">
       <WindSpeedOverlay active={rocketTime > 0} />
@@ -1395,11 +1395,22 @@ function UIOverlay({ score, coinCount, fps, showFps, graphicsQuality, onToggleGr
         <span className="font-black text-[#ffd369]">SCORE {score.toString().padStart(4, '0')}</span>
         <span className="font-black text-[#ffbd38]">🧀 {coinCount}</span>
       </div>
-      {showFps && <div className="absolute left-5 top-[4.5rem] rounded-xl border border-[#86efac]/30 bg-[#321c13]/85 px-3 py-1.5 text-xs font-black text-[#86efac] shadow-lg backdrop-blur-sm">{fps} FPS</div>}
+      <div className="pointer-events-auto absolute left-5 top-[4.5rem] z-20 flex max-w-[calc(100vw-2.5rem)] flex-row items-center gap-3">
+        {showFps && <div className="whitespace-nowrap rounded-xl border border-[#86efac]/30 bg-[#321c13]/85 px-3 py-1.5 text-xs font-black text-[#86efac] shadow-lg backdrop-blur-sm">{fps} FPS</div>}
+        <button
+          type="button"
+          onClick={onToggleSound}
+          className="whitespace-nowrap rounded-xl border border-[#fed23a]/30 bg-[#321c13]/85 px-3 py-1.5 text-xs font-black text-[#fed23a] shadow-lg"
+          aria-pressed={soundEnabled}
+          aria-label="Toggle sound"
+        >
+          {soundEnabled ? '🔊 Sound' : '🔇 Muted'}
+        </button>
+      </div>
       <button
         type="button"
         onClick={onToggleGraphicsQuality}
-        className="pointer-events-auto absolute left-5 top-[7.5rem] rounded-xl border border-[#fed23a]/30 bg-[#321c13]/85 px-3 py-1.5 text-xs font-black text-[#fed23a] shadow-lg"
+        className="pointer-events-auto absolute left-5 top-[7.5rem] z-20 rounded-xl border border-[#fed23a]/30 bg-[#321c13]/85 px-3 py-1.5 text-xs font-black text-[#fed23a] shadow-lg"
         aria-label="Toggle graphics quality"
       >
         Graphics: {graphicsQuality === 'high' ? 'High' : 'Low'}
@@ -1681,6 +1692,8 @@ export default function App() {
         coinCount={coinCount}
         fps={fps}
         showFps={showFps}
+        soundEnabled={soundEnabled}
+        onToggleSound={toggleSound}
         graphicsQuality={graphicsQuality}
         onToggleGraphicsQuality={toggleGraphicsQuality}
         invincibleTime={invincibleTime}
