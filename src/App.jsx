@@ -22,6 +22,7 @@ import {
   playFirstHitSound,
   playGameOverSound,
   playJumpSound,
+  playMagnetSound,
   playMilkSound,
   playMouseTrapSound,
   playRocketTakeSound,
@@ -1286,6 +1287,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         continue
       }
       if (obstacle.type === 'magnet' && pickupHit) {
+        playMagnetSound()
         particleEmitter.emitPowerupPickup(player.current.position.x, player.current.position.y + 0.3, player.current.position.z, 'magnet')
         obstacle.z = 2
         onMagnet()

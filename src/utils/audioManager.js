@@ -3,6 +3,7 @@ import butterSoundUrl from '../assets/music/butter.wav'
 import gameOverSoundUrl from '../assets/music/game-over.mp3'
 import firstHitSoundUrl from '../assets/music/first-hit.mp3'
 import jumpSoundUrl from '../assets/music/jump.mp3'
+import magnetSoundUrl from '../assets/music/magnet.mp3'
 import milkSoundUrl from '../assets/music/milk.wav'
 import mouseTrapSoundUrl from '../assets/music/mouse-trap.mp3'
 import rocketTakeSoundUrl from '../assets/music/rocket-take.wav'
@@ -29,6 +30,7 @@ const soundPools = {
   firstHit: createSoundPool(firstHitSoundUrl, 0.7),
   gameOver: createSoundPool(gameOverSoundUrl, 0.8),
   jump: createSoundPool(jumpSoundUrl, 0.55, SFX_POOL_SIZE),
+  magnet: createSoundPool(magnetSoundUrl, 0.65),
   milk: createSoundPool(milkSoundUrl, 0.65),
   mouseTrap: createSoundPool(mouseTrapSoundUrl, 0.7),
   rocketTake: createSoundPool(rocketTakeSoundUrl, 0.7),
@@ -95,6 +97,10 @@ export function playRocketTakeSound() {
 
 export function playMilkSound() {
   playPooledSound('milk')
+}
+
+export function playMagnetSound() {
+  playPooledSound('magnet')
 }
 
 export function playMouseTrapSound() {
