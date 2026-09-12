@@ -17,7 +17,18 @@ import RocketModel from './components/RocketModel'
 import { BookObstacle, BOOK_MODEL_CENTER_OFFSET } from './components/BookModel'
 import ParticleEffects from './components/ParticleEffects'
 import { particleEmitter } from './utils/particleEmitter'
-import { playJumpSound, readSoundPreference, setSoundMuted, startAudio } from './utils/audioManager'
+import {
+  playCheeseCollectSound,
+  playFirstHitSound,
+  playGameOverSound,
+  playJumpSound,
+  playMilkSound,
+  playMouseTrapSound,
+  playRocketTakeSound,
+  readSoundPreference,
+  setSoundMuted,
+  startAudio,
+} from './utils/audioManager'
 import AtmosphericParticles from './components/AtmosphericParticles'
 import { RocketThrust, FlightSpeedStreaks, MagnetFluxParticles, CatChaseAura } from './components/SpecialEffects'
 import WindSpeedOverlay from './components/WindSpeedOverlay'
@@ -1227,6 +1238,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       const hitZ = Math.abs(pz - oz) < 0.4
       const pickupHit = Math.abs(px - ox) < 0.75 && Math.abs(pz - oz) < 0.85
       if (obstacle.type === 'milkBowl' && pickupHit) {
+        playMilkSound()
         particleEmitter.emitPowerupPickup(player.current.position.x, player.current.position.y + 0.3, player.current.position.z, 'milk')
         playerStats.current.invincibleUntil = state.clock.elapsedTime + 5
         obstacle.z = 2
@@ -1240,6 +1252,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         continue
       }
       if (obstacle.type === 'rocket' && pickupHit) {
+        playRocketTakeSound()
         particleEmitter.emitPowerupPickup(player.current.position.x, player.current.position.y + 0.3, player.current.position.z, 'rocket')
         obstacle.z = 2
         onRocket()
@@ -1252,6 +1265,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       const collision = hitX && hitZ && (hitJumpObject || hitOverhead)
 
       if (collision && state.clock.elapsedTime - playerStats.current.lastHitTime > 1.5) {
+        if (obstacle.type === 'mousetrap') playMouseTrapSound()
         particleEmitter.emitImpactBurst(player.current.position.x, player.current.position.y + 0.25, player.current.position.z, obstacle.type)
         playerStats.current.lastHitTime = state.clock.elapsedTime
         obstacle.z = 2
@@ -1508,12 +1522,15 @@ export default function App() {
 
   const caught = (finalScore, instant = false) => {
     if (isCaught) return
-    hits.current += 1
+    const nextHits = hits.current + 1
+    hits.current = nextHits
     setIsCaught(true)
     clearTimeout(catchTimer.current)
-    if (instant || hits.current >= 2) {
+    if (instant || nextHits >= 2) {
+      playGameOverSound()
       catchTimer.current = setTimeout(() => gameOver(finalScore), instant ? 500 : 1500)
     } else {
+      playFirstHitSound()
       catchTimer.current = setTimeout(() => setIsCaught(false), 1000)
     }
   }
@@ -1606,7 +1623,10 @@ export default function App() {
           showFps={showFps}
           onFps={setFps}
           onScore={setScore}
-          onCoin={(value) => setCoinCount((total) => total + value)}
+          onCoin={(value) => {
+            playCheeseCollectSound()
+            setCoinCount((total) => total + value)
+          }}
           onMilk={() => setInvincibleTime(5)}
           onMagnet={() => setMagnetTime(8)}
           onRocket={() => setRocketTime(10)}
