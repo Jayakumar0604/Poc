@@ -1,77 +1,163 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { EffectComposer, SSAO } from '@react-three/postprocessing'
-import { CanvasTexture, DoubleSide, RepeatWrapping } from 'three'
+import { Box3, CanvasTexture, MathUtils, RepeatWrapping } from 'three'
+import MainMenu from './components/MainMenu'
+import ThreeMenuCanvas from './components/ThreeMenuScene'
+import GraphicsQualityManager from './components/GraphicsQualityManager'
+import CatModel from './components/CatModel'
+import LampModel from './components/LampModel'
+import MousetrapModel from './components/MousetrapModel'
+import YarnModel from './components/YarnModel'
+import MilkModel, { MILK_MODEL_CENTER_OFFSET } from './components/MilkModel'
+import VacuumRobot from './components/VacuumRobot'
+import CheeseModel from './components/CheeseModel'
+import MagnetModel from './components/MagnetModel'
+import RocketModel from './components/RocketModel'
+import { BookObstacle, BOOK_MODEL_CENTER_OFFSET } from './components/BookModel'
+import ParticleEffects from './components/ParticleEffects'
+import { particleEmitter } from './utils/particleEmitter'
+import {
+  playCheeseCollectSound,
+  playFirstHitSound,
+  playGameOverSound,
+  playJumpSound,
+  playMagnetSound,
+  playMilkSound,
+  playMouseTrapSound,
+  playRocketTakeSound,
+  readSoundPreference,
+  setSoundMuted,
+  startAudio,
+} from './utils/audioManager'
+import AtmosphericParticles from './components/AtmosphericParticles'
+import { RocketThrust, FlightSpeedStreaks, MagnetFluxParticles, CatChaseAura } from './components/SpecialEffects'
+import WindSpeedOverlay from './components/WindSpeedOverlay'
 
 const KEY = 'endless-runner-high-score'
-const LANES = [-2.4, 0, 2.4]
+const FPS_KEY = 'show-fps-counter'
+const GRAPHICS_QUALITY_KEY = 'graphics-quality'
+const LANE_STEP = 2.4
+const LANES = [-LANE_STEP, 0, LANE_STEP]
+const randomLane = () => LANES[Math.floor(Math.random() * LANES.length)]
 const GROUND_Y = -0.57
 const MOUSE_GROUND_Y = GROUND_Y + 0.2
+// High enough for the mouse's full body to clear the tallest ground obstacle.
+const FLIGHT_Y = GROUND_Y + 3.0
 const CAT_GROUND_Y = GROUND_Y + 0.55
 const CHEESE_GROUND_Y = GROUND_Y + 0.3
+const CHEESE_AIRBORNE_Y = FLIGHT_Y + 0.1
+const OVERHEAD_TYPES = ['table', 'pencils']
+const MOVING_TYPES = ['mousetrap', 'yarn', 'vacuum', 'mousetrap', 'yarn', 'book']
+const MIN_OBJECT_GAP = 8
+const OBSTACLE_SPAWN_GAP = 5.5
+const INITIAL_CHEESE_REQUESTS = 4
+const chooseSpawnType = () => {
+  const rand = Math.random()
+  if (rand > 0.4) return 'obstacle'
+  if (rand > 0.14) return 'cheese'
+  if (rand > 0.07) return 'milk'
+  if (rand > 0.03) return 'magnet'
+  return 'rocket'
+}
 const DIFFICULTIES = {
   Easy: { baseSpeed: 3, maxSpeed: 12 },
   Medium: { baseSpeed: 6, maxSpeed: 18 },
   Hard: { baseSpeed: 9, maxSpeed: 26 },
 }
 const readBest = () => Number(localStorage.getItem(KEY)) || 0
-const coinFits = (x, z, obstacles) => obstacles.every(
-  (obstacle) => Math.abs(obstacle.x - x) >= 1 || Math.abs(obstacle.z - z) >= 1,
+const readFpsPreference = () => localStorage.getItem(FPS_KEY) !== 'false'
+const readGraphicsQuality = () => localStorage.getItem(GRAPHICS_QUALITY_KEY) === 'low' ? 'low' : 'high'
+const coinFits = (z, lane, obstacles, positions) => (
+  obstacles.every((obstacle) => (
+    Math.abs(obstacle.x - lane) >= 0.9 || Math.abs(obstacle.z - z) >= MIN_OBJECT_GAP
+  )) &&
+  [...positions.values()].every((other) => (
+    Math.abs(other.x - lane) >= 0.9 || Math.abs(other.z - z) >= MIN_OBJECT_GAP
+  ))
 )
 
-function Camera({ isCaught, cinematic }) {
+function Camera({ isCaught, cinematic, flightActive = false }) {
   const { camera } = useThree()
+  const targetFov = flightActive ? 66 : 55
 
   useFrame((_, delta) => {
-    const targetZ = isCaught ? 3.5 : cinematic ? 5.5 : 7
-    const targetY = isCaught ? 2.8 : cinematic ? 2.6 : 3.5
+    const targetZ = isCaught ? 3.5 : cinematic ? 5.5 : flightActive ? 8.2 : 7
+    const targetY = isCaught ? 2.8 : cinematic ? 2.6 : flightActive ? 4.8 : 3.5
+    const targetLookAtY = isCaught ? 0.2 : flightActive ? 1.4 : 0.1
+
     camera.position.lerp(
       { x: camera.position.x, y: targetY, z: targetZ },
-      Math.min(1, delta * 6),
+      Math.min(1, delta * (flightActive ? 4 : 5)),
     )
-    camera.lookAt(0, isCaught ? 0.2 : 0.1, cinematic ? -10 : -18)
+    camera.lookAt(0, targetLookAtY, cinematic ? -10 : -18)
+
+    if (Math.abs(camera.fov - targetFov) > 0.1) {
+      // oxlint-disable-next-line react/immutability
+      camera.fov = MathUtils.lerp(camera.fov, targetFov, Math.min(1, delta * 5))
+      camera.updateProjectionMatrix()
+    }
   })
 
   return null
 }
 
-function Lighting({ theme }) {
+function Lighting({ theme, highQuality }) {
   const day = theme === 'day'
   return (
     <>
       <color attach="background" args={[day ? '#87CEEB' : '#0B0C10']} />
       <fog attach="fog" args={[day ? '#87CEEB' : '#0B0C10', 15, 60]} />
-      <ambientLight intensity={day ? 0.95 : 0.35} color={day ? '#fff1d0' : '#443022'} />
-      <directionalLight
-        position={day ? [10, 20, 10] : [5, 10, 5]}
-        intensity={day ? 1.5 : 0.7}
-        color={day ? '#ffd39a' : '#d98b5f'}
-        castShadow
-        shadow-radius={4}
-      />
+      {highQuality ? (
+        <>
+          <hemisphereLight
+            skyColor={day ? '#dff4ff' : '#24345f'}
+            groundColor={day ? '#8b5a3c' : '#120d16'}
+            intensity={day ? 0.65 : 0.35}
+          />
+          <directionalLight
+            position={day ? [10, 20, 10] : [5, 10, 5]}
+            intensity={day ? 1.25 : 0.6}
+            color={day ? '#ffd39a' : '#d98b5f'}
+            castShadow
+            shadow-mapSize={[2048, 2048]}
+            shadow-camera-left={-12}
+            shadow-camera-right={12}
+            shadow-camera-top={12}
+            shadow-camera-bottom={-12}
+            shadow-camera-near={0.5}
+            shadow-camera-far={80}
+            shadow-bias={-0.0005}
+            shadow-normalBias={0.02}
+            shadow-radius={3}
+          />
+        </>
+      ) : (
+        <>
+          <hemisphereLight
+            skyColor={day ? '#bfe8ff' : '#0a1128'}
+            groundColor={day ? '#6e422f' : '#010205'}
+            intensity={day ? 0.9 : 0.35}
+          />
+          <directionalLight
+            position={[4, 8, 4]}
+            intensity={day ? 0.9 : 0.45}
+            color={day ? '#ffe6bf' : '#b8d0fe'}
+          />
+        </>
+      )}
     </>
   )
 }
 
-function TableLamp({ theme }) {
+function TableLamp({ theme, highQuality }) {
   return (
-    <group>
-      <mesh position={[0, 0.15, 0]} castShadow>
-        <cylinderGeometry args={[0.45, 0.55, 0.3, 8]} />
-        <meshStandardMaterial color="#c08457" flatShading />
-      </mesh>
-      <mesh position={[0, 0.9, 0]} castShadow>
-        <cylinderGeometry args={[0.06, 0.06, 1.5, 8]} />
-        <meshStandardMaterial color="#8b5e3c" flatShading />
-      </mesh>
-      <mesh position={[0, 1.7, 0]} castShadow>
-        <coneGeometry args={[0.55, 0.65, 8]} />
-        <meshStandardMaterial color="#ffd166" emissive="#ffaa00" emissiveIntensity={0.5} flatShading />
-      </mesh>
-      {theme === 'night' && (
-        <pointLight position={[0, 1.7, 0]} intensity={12} distance={12} decay={2} color="#ffcc77" />
-      )}
-    </group>
+    <LampModel
+      theme={theme}
+      scale={0.065}
+      position={[0, 0, 0]}
+      withLight={highQuality}
+    />
   )
 }
 
@@ -118,7 +204,7 @@ function LowPolyTree() {
   )
 }
 
-function SideScenery({ active, speedRef, theme }) {
+function SideScenery({ active, speedRef, theme, highQuality }) {
   const lights = useMemo(
     () => Array.from({ length: 8 }, (_, i) => ({ x: i % 2 ? -3.5 : 3.5, z: -i * 10 - 8 })),
     [],
@@ -149,9 +235,37 @@ function SideScenery({ active, speedRef, theme }) {
 
   return (
     <>
+      <mesh position={[-4.5, GROUND_Y + 0.4, 0]} castShadow receiveShadow>
+        <boxGeometry args={[1.2, 0.8, 100]} />
+        <meshStandardMaterial color="#8a542f" roughness={0.9} flatShading />
+      </mesh>
+      <mesh position={[4.5, GROUND_Y + 0.4, 0]} castShadow receiveShadow>
+        <boxGeometry args={[1.2, 0.8, 100]} />
+        <meshStandardMaterial color="#8a542f" roughness={0.9} flatShading />
+      </mesh>
+      <mesh position={[-4.5, GROUND_Y + 2.8, 0]} receiveShadow>
+        <boxGeometry args={[1, 4, 100]} />
+        <meshStandardMaterial color="#f7e5c5" roughness={0.9} flatShading />
+      </mesh>
+      <mesh position={[4.5, GROUND_Y + 2.8, 0]} receiveShadow>
+        <boxGeometry args={[1, 4, 100]} />
+        <meshStandardMaterial color="#d2e6d4" roughness={0.9} flatShading />
+      </mesh>
+      {[-1, 1].flatMap((side) => [-18, -48].map((z, index) => (
+        <mesh key={`painting-${side}-${index}`} position={[side * 3.95, 2.5, z]} castShadow>
+          <boxGeometry args={[0.1, 1.5, 1.5]} />
+          <meshStandardMaterial color={index ? '#4f86c6' : '#e7b98c'} flatShading />
+        </mesh>
+      )))}
+      {[-1, 1].flatMap((side) => [-30, -70].map((z, index) => (
+        <mesh key={`hole-${side}-${index}`} position={[side * 3.95, GROUND_Y + 0.4, z]}>
+          <boxGeometry args={[0.1, 0.6, 0.6]} />
+          <meshBasicMaterial color="#050505" />
+        </mesh>
+      )))}
       {lights.map((light, index) => (
         <group key={`lamp-${index}`} ref={(node) => (lampRefs.current[index] = node)} position={[light.x, GROUND_Y, light.z]}>
-          <TableLamp theme={theme} />
+          <TableLamp theme={theme} highQuality={highQuality} />
         </group>
       ))}
       {trees.map((tree, index) => (
@@ -171,18 +285,7 @@ function MenuDecor() {
     <>
       {cheeseBlocks.map(([x, y, z], index) => (
         <group key={`cheese-${index}`} position={[x, y, z]} rotation={[0, index * 0.4, 0]}>
-          <mesh castShadow receiveShadow>
-            <boxGeometry args={[1.4, 1.4, 1.4]} />
-            <meshStandardMaterial color="#ffca28" flatShading />
-          </mesh>
-          <mesh position={[-0.35, 0.3, -0.72]}>
-            <sphereGeometry args={[0.14, 6, 5]} />
-            <meshStandardMaterial color="#d88b18" flatShading />
-          </mesh>
-          <mesh position={[0.25, -0.25, -0.72]}>
-            <sphereGeometry args={[0.1, 6, 5]} />
-            <meshStandardMaterial color="#d88b18" flatShading />
-          </mesh>
+          <CheeseModel scale={[7.0, 11.6, 11.6]} centerOrigin />
         </group>
       ))}
       {trees.map(([x, z], index) => (
@@ -213,21 +316,44 @@ function MenuDecor() {
   )
 }
 
-function Mouse({ playerRef, active, cinematic }) {
+function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActive = false, flightModeRef, highQuality }) {
   const mouseRef = useRef()
+  const tailRef = useRef()
   const velocity = useRef(0)
   const grounded = useRef(true)
   const ducking = useRef(false)
+  const targetX = useRef(cinematic ? -2.4 : 0)
+  const landSquash = useRef(1)
+  const wasRocketActive = useRef(false)
+  const recoveringFromFlight = useRef(false)
+  const stepTimer = useRef(0)
+
   const attachMouse = useCallback((node) => {
     mouseRef.current = node
     playerRef.current = node
   }, [playerRef])
+
+  useEffect(() => {
+    if (rocketActive) {
+      wasRocketActive.current = true
+      recoveringFromFlight.current = false
+      grounded.current = false
+      ducking.current = false
+      velocity.current = 0
+    } else if (wasRocketActive.current) {
+      wasRocketActive.current = false
+      recoveringFromFlight.current = true
+      grounded.current = false
+      velocity.current = 0
+    }
+  }, [rocketActive])
+
   const setDuck = useCallback((value) => {
     const player = mouseRef.current
     if (!player) return
-    player.scale.set(1, value ? 0.5 : 1, 1)
+    player.scale.set(1, value ? 0.45 : 1, 1)
     player.position.y = value ? GROUND_Y + 0.1 : MOUSE_GROUND_Y
-  }, [playerRef])
+  }, [])
 
   useEffect(() => {
     const move = (event) => {
@@ -239,6 +365,7 @@ function Mouse({ playerRef, active, cinematic }) {
       event.preventDefault()
 
       if (jump && grounded.current) {
+        playJumpSound()
         ducking.current = false
         grounded.current = false
         velocity.current = 12
@@ -251,7 +378,7 @@ function Mouse({ playerRef, active, cinematic }) {
       }
       if (['a', 'd', 'arrowleft', 'arrowright'].includes(key)) {
         const direction = key === 'a' || key === 'arrowleft' ? -1 : 1
-        playerRef.current.position.x = Math.max(-2.8, Math.min(2.8, playerRef.current.position.x + direction * 2.4))
+        targetX.current = Math.max(LANES[0], Math.min(LANES[2], targetX.current + direction * LANE_STEP))
       }
     }
     const stopDuck = (event) => {
@@ -271,19 +398,125 @@ function Mouse({ playerRef, active, cinematic }) {
   useFrame((state, delta) => {
     if (!active || !mouseRef.current) return
     const player = mouseRef.current
-    if (!grounded.current) {
+    const t = state.clock.elapsedTime
+
+    // Responsive, smooth lane transition with banking & yaw
+    const currentX = player.position.x
+    const newX = MathUtils.lerp(currentX, targetX.current, Math.min(1, delta * 16))
+    player.position.x = newX
+    const dx = targetX.current - newX
+    const bankZ = -dx * 0.35
+    const yawY = dx * 0.2
+
+    const flightMode = rocketActive || recoveringFromFlight.current
+    flightModeRef.current = flightMode
+
+    if (flightMode) {
+      const targetY = rocketActive ? FLIGHT_Y : MOUSE_GROUND_Y
+      const lerpSpeed = rocketActive ? 6 : 4.5
+      player.position.y = MathUtils.lerp(player.position.y, targetY, Math.min(1, delta * lerpSpeed))
+      velocity.current = 0
+      grounded.current = false
+      ducking.current = false
+
+      if (!rocketActive && Math.abs(player.position.y - MOUSE_GROUND_Y) < 0.04) {
+        player.position.y = MOUSE_GROUND_Y
+        grounded.current = true
+        recoveringFromFlight.current = false
+        flightModeRef.current = false
+        landSquash.current = 0.65 // Landing impact squash
+        particleEmitter.emitLandShockwave(player.position.x, MOUSE_GROUND_Y, player.position.z)
+        particleEmitter.emitDustPuff(player.position.x, MOUSE_GROUND_Y - 0.1, player.position.z + 0.16, 1.4, 4)
+      }
+    } else if (!grounded.current) {
       velocity.current -= 30 * delta
       player.position.y += velocity.current * delta
       if (player.position.y <= MOUSE_GROUND_Y) {
         player.position.y = MOUSE_GROUND_Y
         velocity.current = 0
         grounded.current = true
+        landSquash.current = 0.72 // Squash on landing impact
+        particleEmitter.emitLandShockwave(player.position.x, MOUSE_GROUND_Y, player.position.z)
       }
     }
-    if (grounded.current) {
-      setDuck(ducking.current)
-      mouseRef.current.rotation.z = Math.sin(state.clock.elapsedTime * 15) * 0.1
-      mouseRef.current.position.y = (ducking.current ? GROUND_Y + 0.1 : MOUSE_GROUND_Y) + Math.abs(Math.sin(state.clock.elapsedTime * 15)) * 0.05
+
+    landSquash.current = MathUtils.lerp(landSquash.current, 1, Math.min(1, delta * 10))
+
+    if (flightMode) {
+      const altitudeProgress = Math.max(0, Math.min(1, (player.position.y - MOUSE_GROUND_Y) / (FLIGHT_Y - MOUSE_GROUND_Y)))
+      if (rocketActive) {
+        if (altitudeProgress < 0.85) {
+          // Takeoff pitch: nose angled upward into flight path
+          player.scale.set(0.92, 0.9, 1.15)
+          player.rotation.x = -0.34
+          player.rotation.z = bankZ * 1.1
+          player.rotation.y = yawY
+        } else {
+          // Cruising aerodynamic glide: streamlined body, sharp bank into lane turns, slipstream bobbing
+          player.scale.set(0.88, 0.82, 1.22)
+          player.rotation.x = -0.14
+          player.rotation.z = bankZ * 1.35
+          player.rotation.y = yawY * 1.2
+          player.position.y += Math.sin(t * 10) * 0.012
+        }
+      } else {
+        // Landing descent flare: air-brake flare with nose tilted slightly up
+        player.scale.set(1.04, 0.94, 0.96)
+        player.rotation.x = 0.16
+        player.rotation.z = bankZ * 0.9
+        player.rotation.y = yawY
+      }
+    } else if (ducking.current) {
+      // Sleek torpedo belly slide with low collision profile
+      player.scale.set(1.15, 0.45, 1.4)
+      player.position.y = GROUND_Y + 0.1 + Math.sin(t * 22) * 0.02
+      player.rotation.z = bankZ + Math.sin(t * 22) * 0.04
+      player.rotation.x = -0.05
+      player.rotation.y = yawY
+    } else if (!grounded.current) {
+      // Airborne stretch & arc tilt
+      const jumpStretch = Math.max(0.85, Math.min(1.3, 1 + velocity.current * 0.025))
+      player.scale.set(1 / Math.sqrt(jumpStretch), jumpStretch * landSquash.current, 1 / Math.sqrt(jumpStretch))
+      player.rotation.x = -velocity.current * 0.025
+      player.rotation.z = bankZ
+      player.rotation.y = yawY
+    } else {
+      // Energetic ground running stride with squash & stretch
+      const gallop = Math.sin(t * 18)
+      player.position.y = MOUSE_GROUND_Y + Math.abs(gallop) * 0.06
+      const bodySquash = (1 + gallop * 0.05) * landSquash.current
+      player.scale.set(1 - gallop * 0.03, bodySquash, 1 + gallop * 0.02)
+      player.rotation.z = bankZ + gallop * 0.08
+      player.rotation.x = 0.04 + Math.max(0, gallop) * 0.05
+      player.rotation.y = yawY
+
+      if (grounded.current && active && !cinematic) {
+        stepTimer.current += delta
+        if (stepTimer.current > (ducking.current ? 0.07 : 0.15)) {
+          stepTimer.current = 0
+          particleEmitter.emitDustPuff(
+            player.position.x,
+            MOUSE_GROUND_Y - 0.1,
+            player.position.z + 0.16,
+            ducking.current ? 1.3 : 0.8,
+            ducking.current ? 4 : 2,
+          )
+        }
+      }
+    }
+
+    // Reactive tail whip & slipstream flutter
+    if (tailRef.current) {
+      if (flightMode && rocketActive) {
+        tailRef.current.rotation.z = Math.sin(t * 32) * 0.45 - dx * 0.6
+        tailRef.current.rotation.x = Math.PI / 2 + 0.35
+      } else if (flightMode) {
+        tailRef.current.rotation.z = Math.sin(t * 18) * 0.25 - dx * 0.4
+        tailRef.current.rotation.x = Math.PI / 2 - 0.15
+      } else {
+        tailRef.current.rotation.z = Math.sin(t * 20) * 0.25 - dx * 0.5
+        tailRef.current.rotation.x = Math.PI / 2 + (ducking.current ? 0.22 : Math.sin(t * 18) * 0.1)
+      }
     }
   })
 
@@ -313,16 +546,60 @@ function Mouse({ playerRef, active, cinematic }) {
         <sphereGeometry args={[0.035, 8, 8]} />
         <meshStandardMaterial color="#050505" flatShading />
       </mesh>
-      <mesh position={[0, 0, 0.32]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
+      {/* Front gliding paws */}
+      <mesh position={[-0.14, -0.06, -0.18]} castShadow>
+        <sphereGeometry args={[0.04, 6, 6]} />
+        <meshStandardMaterial color="#ff9bb5" flatShading />
+      </mesh>
+      <mesh position={[0.14, -0.06, -0.18]} castShadow>
+        <sphereGeometry args={[0.04, 6, 6]} />
+        <meshStandardMaterial color="#ff9bb5" flatShading />
+      </mesh>
+      <mesh ref={tailRef} position={[0, 0, 0.32]} rotation={[Math.PI / 2, 0, 0]} castShadow receiveShadow>
         <cylinderGeometry args={[0.015, 0.015, 0.6]} />
         <meshStandardMaterial color="#555" flatShading />
       </mesh>
+      {magnetActive && (
+        <group position={[0, 0.46, -0.05]}>
+          <MagnetModel scale={0.18} hasAura={false} />
+          {highQuality && (
+            <mesh rotation={[-Math.PI / 2, 0, 0]}>
+              <ringGeometry args={[0.32, 0.44, 24]} />
+              <meshBasicMaterial color="#38bdf8" transparent opacity={0.65} />
+            </mesh>
+          )}
+          {highQuality && <MagnetFluxParticles />}
+        </group>
+      )}
+      {rocketActive && (
+        <group position={[0, -0.28, 0.28]} rotation={[Math.PI, 0, 0]}>
+          <mesh castShadow>
+            <coneGeometry args={[0.14, 0.46, 8]} />
+            <meshStandardMaterial color="#ff6b1a" emissive="#ff3200" emissiveIntensity={2.2} />
+          </mesh>
+          {highQuality && (
+            <mesh position={[0, -0.03, 0]}>
+              <coneGeometry args={[0.07, 0.3, 8]} />
+              <meshStandardMaterial color="#ffe066" emissive="#ff9f00" emissiveIntensity={2.8} />
+            </mesh>
+          )}
+          {highQuality && <RocketThrust highQuality />}
+        </group>
+      )}
     </group>
   )
 }
 
-function Cat({ catRef, playerRef, active, isCaught }) {
+function Cat({ catRef, playerRef, playerStats, active, isCaught, highQuality }) {
   const startTime = useRef(null)
+  const lastGallop = useRef(0)
+  const chaseActive = useRef(false)
+
+  useEffect(() => {
+    if (!active) {
+      startTime.current = null
+    }
+  }, [active])
 
   useFrame((state, delta) => {
     if (!active || !catRef.current || !playerRef.current) return
@@ -332,101 +609,134 @@ function Cat({ catRef, playerRef, active, isCaught }) {
     const elapsed = state.clock.elapsedTime - startTime.current
     const cat = catRef.current
 
-    if (isCaught) {
-      cat.visible = true
-      cat.position.lerp({ x: mouse.x, y: CAT_GROUND_Y, z: mouse.z }, Math.min(1, delta * 12))
-    } else if (elapsed < 3) {
-      cat.visible = true
-      cat.position.set(mouse.x, CAT_GROUND_Y, mouse.z + 3)
-    } else {
-      cat.visible = false
+    if (playerStats.current.hits === 1 && state.clock.elapsedTime - playerStats.current.lastHitTime > 8) {
+      // oxlint-disable-next-line react/immutability
+      playerStats.current.hits = 0
     }
 
-    cat.rotation.z = Math.sin(state.clock.elapsedTime * 20) * 0.15
-    cat.position.y = CAT_GROUND_Y + Math.abs(Math.sin(state.clock.elapsedTime * 20)) * 0.1
+    if (isCaught) {
+      cat.visible = true
+      cat.position.lerp({ x: mouse.x, y: CAT_GROUND_Y + 0.1, z: mouse.z + 0.3 }, Math.min(1, delta * 14))
+      cat.rotation.x = 0.22
+      cat.rotation.z = 0
+      cat.rotation.y = Math.PI
+      cat.scale.set(1.05, 0.9, 1.25)
+    } else {
+      const chase = playerStats.current.hits === 1
+      chaseActive.current = chase
+      const visible = chase || elapsed < 4.0
+      const targetZ = chase ? mouse.z + 0.85 : visible ? mouse.z + 1.1 : mouse.z + 15
+      cat.visible = visible
+      cat.position.x = MathUtils.lerp(cat.position.x, mouse.x, 0.08)
+      cat.position.z = MathUtils.lerp(cat.position.z, targetZ, 0.08)
+
+      const t = state.clock.elapsedTime
+      const gallop = Math.sin(t * 18)
+      const swerve = mouse.x - cat.position.x
+
+      // Undulating bounding predator gallop
+      cat.rotation.x = -gallop * 0.13 - 0.04
+      cat.rotation.z = Math.cos(t * 18) * 0.09 - swerve * 0.28
+      cat.rotation.y = Math.PI - swerve * 0.18
+      cat.position.y = CAT_GROUND_Y + Math.max(0, gallop) * 0.18
+      cat.scale.set(1 - gallop * 0.04, 1 + gallop * 0.06, 1 + gallop * 0.03)
+
+      // Heavy paw stomp dust when landing bounding strides
+      if (visible && gallop < -0.75 && lastGallop.current >= -0.75) {
+        particleEmitter.emitDustPuff(cat.position.x, CAT_GROUND_Y - 0.48, cat.position.z + 0.15, 1.8, 3)
+      }
+      lastGallop.current = gallop
+    }
   })
 
   return (
-    <group ref={catRef} position={[0, CAT_GROUND_Y, 3]} visible={active || isCaught}>
-      <mesh position={[0, 0.12, 0.15]} scale={[0.75, 0.7, 1.15]} castShadow receiveShadow>
-        <sphereGeometry args={[0.45, 6, 4]} />
-        <meshStandardMaterial color="#171923" flatShading />
-      </mesh>
-      <mesh position={[0, 0.42, -0.5]} castShadow receiveShadow>
-        <sphereGeometry args={[0.35, 6, 4]} />
-        <meshStandardMaterial color="#252936" flatShading />
-      </mesh>
-      <mesh position={[0, 0.34, -0.8]} castShadow>
-        <sphereGeometry args={[0.12, 6, 4]} />
-        <meshStandardMaterial color="#b8a9a0" flatShading />
-      </mesh>
-      <mesh position={[-0.1, 0.65, -0.5]} castShadow>
-        <coneGeometry args={[0.1, 0.25, 4]} />
-        <meshStandardMaterial color="#252936" flatShading />
-      </mesh>
-      <mesh position={[0.1, 0.65, -0.5]} castShadow>
-        <coneGeometry args={[0.1, 0.25, 4]} />
-        <meshStandardMaterial color="#252936" flatShading />
-      </mesh>
-      <mesh position={[-0.1, 0.47, -0.83]} rotation={[0, 0, -0.2]} castShadow>
-        <boxGeometry args={[0.08, 0.05, 0.05]} />
-        <meshStandardMaterial color="#aaff00" emissive="#aaff00" emissiveIntensity={2} flatShading />
-      </mesh>
-      <mesh position={[0.1, 0.47, -0.83]} rotation={[0, 0, 0.2]} castShadow>
-        <boxGeometry args={[0.08, 0.05, 0.05]} />
-        <meshStandardMaterial color="#aaff00" emissive="#aaff00" emissiveIntensity={2} flatShading />
-      </mesh>
-      <mesh position={[0, 0.18, 0.82]} rotation={[Math.PI / 2, 0, 0.15]} castShadow>
-        <cylinderGeometry args={[0.06, 0.1, 0.9, 5]} />
-        <meshStandardMaterial color="#171923" flatShading />
-      </mesh>
-      {[-0.22, 0.22].flatMap((x) => [-0.15, 0.45].map((z) => (
-        <mesh key={`${x}-${z}`} position={[x, -0.38, z]} castShadow receiveShadow>
-          <cylinderGeometry args={[0.08, 0.08, 0.35, 6]} />
-          <meshStandardMaterial color="#171923" flatShading />
-        </mesh>
-      )))}
+    <group ref={catRef} position={[0, CAT_GROUND_Y, 1.1]} visible={active || isCaught}>
+      <CatModel position={[0, -0.55, 0]} scale={0.0022} rotation={[0, 0, 0]} />
+      {highQuality && <CatChaseAura playerStats={playerStats} />}
     </group>
   )
 }
 
-function Obstacle({ type, position, obstacleRef }) {
+function Yarn({ position, obstacleRef }) {
+  return <YarnModel position={position} obstacleRef={obstacleRef} />
+}
+
+function MilkBowl({ position, obstacleRef }) {
+  return <MilkModel position={position} obstacleRef={obstacleRef} />
+}
+
+function Vacuum({ position, obstacleRef }) {
+  return <VacuumRobot position={position} obstacleRef={obstacleRef} />
+}
+
+function RocketPickup({ position, obstacleRef, onCollect, highQuality }) {
+  return (
+    <RocketModel
+      position={position}
+      obstacleRef={obstacleRef}
+      onCollect={onCollect}
+      highQuality={highQuality}
+    />
+  )
+}
+
+function MagnetPickup({ position, obstacleRef }) {
+  const spinRef = useRef()
+
+  useFrame((state, delta) => {
+    if (!spinRef.current) return
+    const t = state.clock.elapsedTime
+    spinRef.current.rotation.y += delta * 3.2
+    spinRef.current.position.y = Math.sin(t * 3.5) * 0.08
+  })
+
+  return (
+    <group ref={obstacleRef} position={position}>
+      <group ref={spinRef}>
+        <MagnetModel scale={0.28} />
+      </group>
+    </group>
+  )
+}
+
+function Obstacle({ type, position, obstacleRef, onRocket, highQuality }) {
   const materials = useMemo(() => ({
-    book: '#4f86c6',
-    milk: '#fff7e6',
-    trap: '#d64545',
+    mousetrap: '#d64545',
     table: '#b7794b',
+    pencil: '#ffd43b',
+    ruler: '#8a542f',
   }), [])
 
-  if (type === 'book') {
-    return (
-      <mesh ref={obstacleRef} position={[position[0], position[1] + 0.12, position[2]]} rotation={[0, 0.2, 0]} castShadow receiveShadow>
-        <boxGeometry args={[1.4, 0.24, 1.1]} />
-        <meshStandardMaterial color={materials.book} flatShading />
-      </mesh>
-    )
-  }
+  if (type === 'empty') return null
+  if (type === 'yarn') return <Yarn position={position} obstacleRef={obstacleRef} />
+  if (type === 'milkBowl') return <MilkBowl position={position} obstacleRef={obstacleRef} />
+  if (type === 'vacuum') return <Vacuum position={position} obstacleRef={obstacleRef} />
+  if (type === 'rocket') return <RocketPickup position={position} obstacleRef={obstacleRef} onCollect={onRocket} highQuality={highQuality} />
+  if (type === 'magnet') return <MagnetPickup position={position} obstacleRef={obstacleRef} />
 
-  if (type === 'milk') {
-    return (
-      <mesh ref={obstacleRef} position={[position[0], position[1] + 0.02, position[2]]} rotation={[-Math.PI / 2, 0, 0]} castShadow receiveShadow>
-        <planeGeometry args={[1.5, 1.2]} />
-        <meshStandardMaterial color={materials.milk} flatShading />
-      </mesh>
-    )
-  }
-
-  if (type === 'trap') {
+  if (type === 'pencils') {
     return (
       <group ref={obstacleRef} position={position}>
-        <mesh position={[0, 0.08, 0]} castShadow receiveShadow>
-          <boxGeometry args={[1.4, 0.16, 1.2]} />
-          <meshStandardMaterial color={materials.trap} flatShading />
+        {[-1, 1].map((x) => (
+          <mesh key={x} position={[x, 0.75, 0]} castShadow receiveShadow>
+            <cylinderGeometry args={[0.08, 0.08, 1.5, 6]} />
+            <meshStandardMaterial color={materials.pencil} flatShading />
+          </mesh>
+        ))}
+        <mesh position={[0, 1.525, 0]} castShadow receiveShadow>
+          <boxGeometry args={[2.5, 0.05, 0.4]} />
+          <meshStandardMaterial color={materials.ruler} flatShading />
         </mesh>
-        <mesh position={[0, 0.22, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
-          <cylinderGeometry args={[0.06, 0.06, 1.1, 8]} />
-          <meshStandardMaterial color="#e5e7eb" flatShading />
-        </mesh>
+      </group>
+    )
+  }
+
+  if (type === 'book') return <BookObstacle position={position} obstacleRef={obstacleRef} />
+
+  if (type === 'mousetrap') {
+    return (
+      <group ref={obstacleRef} position={position}>
+        <MousetrapModel />
       </group>
     )
   }
@@ -447,11 +757,13 @@ function Obstacle({ type, position, obstacleRef }) {
   )
 }
 
-function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
+function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, cheeseRequests, onRocket, highQuality }) {
   const items = useMemo(
     () => Array.from({ length: 9 }, (_, i) => {
-      const type = i % 2 ? 'table' : ['book', 'milk', 'trap'][i % 3]
-      return { type, x: LANES[i % 3], z: -8 - i * 7 }
+      if (i === 1) return { type: 'magnet', x: LANES[1], z: -24 }
+      if (i === 4) return { type: 'rocket', x: LANES[2], z: -60 }
+      const type = i % 2 ? OVERHEAD_TYPES[i % OVERHEAD_TYPES.length] : MOVING_TYPES[i % MOVING_TYPES.length]
+      return { type, x: LANES[i % 3], z: -10 - i * 7 }
     }),
     [],
   )
@@ -468,12 +780,51 @@ function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
       const mesh = refs.current[index]
       item.z += delta * speedRef.current
       if (item.z > 5) {
-        const spawnDistance = Math.max(38, 72 - (speedRef.current - baseSpeed) * 2)
-        item.z = -(spawnDistance + Math.random() * 16)
-        item.x = LANES[Math.floor(Math.random() * LANES.length)]
-        item.type = Math.random() < 0.5 ? 'table' : ['book', 'milk', 'trap'][Math.floor(Math.random() * 3)]
+        let z = playerRef.current.position.z - 80
+        while (
+          items.some((other) => other !== item && Math.abs(other.z - z) < OBSTACLE_SPAWN_GAP) ||
+          [...coinPositions.current.values()].some((coin) => Math.abs(coin.z - z) < OBSTACLE_SPAWN_GAP)
+        ) z -= OBSTACLE_SPAWN_GAP
+        item.z = z
+        item.x = randomLane()
+        item.vacuumDirection = Math.random() > 0.5 ? 1 : -1
+        const type = chooseSpawnType()
+        if (type === 'cheese') {
+          item.type = 'empty'
+          cheeseRequests.current += 1
+        } else if (type === 'milk') {
+          item.type = 'milkBowl'
+        } else if (type === 'magnet') {
+          item.type = 'magnet'
+        } else if (type === 'rocket') {
+          item.type = 'rocket'
+        } else {
+          item.type = Math.random() < 0.65
+            ? MOVING_TYPES[Math.floor(Math.random() * MOVING_TYPES.length)]
+            : OVERHEAD_TYPES[Math.floor(Math.random() * OVERHEAD_TYPES.length)]
+        }
       }
-      mesh.position.set(item.x, GROUND_Y, item.z)
+      const y = item.type === 'yarn'
+        ? GROUND_Y + 0.5
+        : item.type === 'milkBowl'
+          ? GROUND_Y + MILK_MODEL_CENTER_OFFSET
+          : item.type === 'magnet'
+              ? GROUND_Y + 0.35
+              : item.type === 'book'
+                ? GROUND_Y + BOOK_MODEL_CENTER_OFFSET
+                : GROUND_Y
+      if (item.type === 'vacuum') {
+        item.vacuumDirection = item.vacuumDirection || 1
+        item.x += item.vacuumDirection * delta * 3.2
+        if (item.x >= LANES[2]) {
+          item.x = LANES[2]
+          item.vacuumDirection = -1
+        } else if (item.x <= LANES[0]) {
+          item.x = LANES[0]
+          item.vacuumDirection = 1
+        }
+      }
+      if (mesh) mesh.position.set(item.x, y, item.z)
     })
   })
 
@@ -482,91 +833,216 @@ function Obstacles({ obstaclesRef, active, speedRef, baseSpeed }) {
       key={index}
       type={item.type}
       position={[item.x, GROUND_Y, item.z]}
-      obstacleRef={(mesh) => (refs.current[index] = mesh)}
+      obstacleRef={(mesh) => {
+        refs.current[index] = mesh
+        item.object = mesh
+      }}
+      onRocket={onRocket}
+      highQuality={highQuality}
     />
   ))
 }
 
-function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, onCollect, onRemove, onMove }) {
+function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, magnetActive, onCollect, onRemove, onMove }) {
   const ref = useRef()
-  const z = useRef(coin.z)
+  const posX = useRef(coin.x)
+  const posY = useRef(coin.y)
+  const posZ = useRef(coin.z)
   const collected = useRef(false)
+  const cheeseBounds = useMemo(() => new Box3(), [])
+  const playerBounds = useMemo(() => new Box3(), [])
+  const pickupBounds = useMemo(() => new Box3(), [])
 
-  useFrame((_, delta) => {
-    if (!active || collected.current) return
-    z.current += delta * speedRef.current
-    onMove(coin.id, coin.x, z.current)
-    ref.current.rotation.y += delta * 2
-    ref.current.position.set(coin.x, coin.y, z.current)
-    if (z.current > 6) {
-      collected.current = true
-      onRemove(coin.id)
-      return
+  useFrame((state, delta) => {
+    if (!active || collected.current || !ref.current) return
+    const p = playerRef.current ? playerRef.current.position : null
+    const t = state.clock.elapsedTime
+    let boundsHit = false
+
+    if (p && playerRef.current && ref.current) {
+      playerRef.current.updateMatrixWorld(true)
+      ref.current.updateMatrixWorld(true)
+      playerBounds.setFromObject(playerRef.current)
+      pickupBounds.copy(playerBounds).expandByScalar(0.12)
+      cheeseBounds.setFromObject(ref.current)
+      boundsHit = !cheeseBounds.isEmpty() && pickupBounds.intersectsBox(cheeseBounds)
     }
 
-    const blocked = obstaclesRef.current.some(
-      (obstacle) =>
-        Math.abs(obstacle.x - coin.x) < 0.9 &&
-        Math.abs(obstacle.z - z.current) < 0.9,
-    )
-    if (blocked) {
-      collected.current = true
-      onRemove(coin.id)
-      return
+    // Player altitude state: player is airborne if elevated during flight
+    const isPlayerAirborne = Boolean(p && p.y > GROUND_Y + 1.2)
+    // Specific collision constraint: While airborne, player can ONLY collect airborne cheese.
+    // While on ground, player can only collect ground cheese.
+    const canCollect = isPlayerAirborne ? Boolean(coin.isAirborne) : !coin.isAirborne
+
+    let isPulled = false
+
+    if (magnetActive && canCollect && p && posZ.current < p.z + 2) {
+      const targetY = p.y + 0.2
+      const dx = p.x - posX.current
+      const dy = targetY - posY.current
+      const dz = p.z - posZ.current
+      const dist = Math.hypot(dx, dy, dz)
+
+      if (dist < 45) {
+        isPulled = true
+        // Accelerate attraction speed as cheese gets closer
+        const pullSpeed = Math.min(42, Math.max(18, 22 + (30 - Math.min(30, dist)) * 1.1))
+        const step = pullSpeed * delta
+        const invDist = dist > 0.001 ? 1 / dist : 1
+
+        posX.current += dx * invDist * step
+        posY.current += dy * invDist * step
+        posZ.current += dz * invDist * step + delta * speedRef.current * 0.4
+
+        ref.current.rotation.y += delta * 14
+        ref.current.rotation.x += delta * 7
+        ref.current.rotation.z += delta * 5
+
+        if (Math.random() > 0.4) {
+          particleEmitter.emitMagnetTrail(posX.current, posY.current, posZ.current)
+        }
+
+        if (dist < 1.15 || (Math.abs(dx) < 0.9 && Math.abs(dy) < 0.9 && Math.abs(dz) < 1.1)) {
+          collected.current = true
+          particleEmitter.emitCheeseBurst(posX.current, posY.current, posZ.current, coin.superCoin)
+          onCollect(coin.id, coin.value)
+          return
+        }
+      }
     }
 
-    const p = playerRef.current.position
-    if (
-      Math.abs(coin.x - p.x) < 0.9 &&
-      Math.abs(coin.y - p.y) < 1 &&
-      Math.abs(z.current - p.z) < 1.1
-    ) {
-      collected.current = true
-      onCollect(coin.id, coin.value)
+    if (!isPulled) {
+      posZ.current += delta * speedRef.current
+      posY.current = coin.y + Math.sin(t * 3.5 + coin.id * 1.5) * 0.08
+
+      ref.current.rotation.y += delta * 2.8
+      ref.current.rotation.x = Math.sin(t * 2.5 + coin.id) * 0.12
+      ref.current.rotation.z = Math.cos(t * 2.0 + coin.id) * 0.08
+
+      if (posZ.current > 6) {
+        collected.current = true
+        onRemove(coin.id)
+        return
+      }
+
+      // Ground obstacles do not block airborne cheese
+      if (!coin.isAirborne) {
+        const blocked = obstaclesRef.current.some(
+          (obstacle) =>
+            Math.abs(obstacle.x - posX.current) < 0.9 &&
+            Math.abs(obstacle.z - posZ.current) < 0.9,
+        )
+        if (blocked) {
+          collected.current = true
+          onRemove(coin.id)
+          return
+        }
+      }
+
+      if (
+        p &&
+        canCollect &&
+        (boundsHit || (
+          Math.abs(posX.current - p.x) < 0.9 &&
+          Math.abs(posY.current - p.y) < 1.0 &&
+          Math.abs(posZ.current - p.z) < 1.1
+        ))
+      ) {
+        collected.current = true
+        particleEmitter.emitCheeseBurst(posX.current, posY.current, posZ.current, coin.superCoin)
+        onCollect(coin.id, coin.value)
+        return
+      }
+    }
+
+    onMove(coin.id, posX.current, posZ.current)
+    ref.current.position.set(posX.current, posY.current, posZ.current)
+
+    if (coin.superCoin) {
+      const pulse = 1 + Math.sin(t * 6) * 0.08
+      ref.current.scale.set(pulse, pulse, pulse)
     }
   })
 
   return (
-    <mesh ref={ref} position={[coin.x, coin.y, coin.z]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-      <cylinderGeometry args={[0.3, 0.3, 0.15, 3]} />
-      <meshStandardMaterial color="#ffcc00" flatShading />
-    </mesh>
+    <group ref={ref} position={[coin.x, coin.y, coin.z]}>
+      <CheeseModel scale={coin.superCoin ? 3.8 : 2.8} centerOrigin />
+    </group>
   )
 }
 
-function makeCoinLine(obstacles, positions, nextId, coinsSpawned) {
-  const count = 3 + Math.floor(Math.random() * 3)
-  const startZ = -(55 + Math.random() * 20)
-  const zValues = Array.from({ length: count }, (_, i) => startZ - i * 3.5)
-  const lane = [...LANES].sort(() => Math.random() - 0.5).find((x) =>
-    zValues.every((z) =>
-      coinFits(x, z, obstacles) &&
-      [...positions.values()].every(
-        (other) => Math.abs(other.x - x) >= 1 || Math.abs(other.z - z) >= 1,
-      ),
-    ),
-  )
-  if (lane === undefined) return []
-  return zValues.map((z) => {
-    const superCoin = coinsSpawned.current++ % 11 === 10
-    return {
-      id: nextId.current++,
-      x: lane,
-      y: CHEESE_GROUND_Y,
-      z,
-      superCoin,
-      value: superCoin ? 20 : 5,
-    }
-  })
+function makeCoinLine(obstacles, positions, nextId, coinsSpawned, playerRef, startDistance = 80, isFlightMode = false) {
+  const count = startDistance === 80 ? 3 + Math.floor(Math.random() * 2) : 3
+  const startZ = playerRef.current.position.z - startDistance - Math.random() * (startDistance === 80 ? 20 : 4)
+  const zValues = Array.from({ length: count }, (_, i) => startZ - i * MIN_OBJECT_GAP)
+  const lane = randomLane()
+  // Airborne cheese is intentionally allowed above ground obstacles so the
+  // flight lane remains available throughout the entire flight window.
+  if (!isFlightMode && !zValues.every((z) => coinFits(z, lane, obstacles, positions))) return []
+
+  const result = []
+
+  if (isFlightMode) {
+    // Dual-level spawning: Airborne cheese line AND Ground cheese line simultaneously
+    // 1. Airborne cheese line
+    zValues.forEach((z) => {
+      const superCoin = coinsSpawned.current++ % 11 === 10
+      result.push({
+        id: nextId.current++,
+        x: lane,
+        y: CHEESE_AIRBORNE_Y,
+        z,
+        isAirborne: true,
+        superCoin,
+        value: superCoin ? 25 : 10,
+      })
+    })
+
+    // 2. Ground cheese line
+    const otherLanes = LANES.filter((l) => l !== lane)
+    const groundLane = otherLanes[Math.floor(Math.random() * otherLanes.length)]
+    const canUseOtherLane = zValues.every((z) => coinFits(z, groundLane, obstacles, positions))
+    const selectedGroundLane = canUseOtherLane ? groundLane : lane
+
+    zValues.forEach((z) => {
+      const superCoin = coinsSpawned.current++ % 11 === 10
+      result.push({
+        id: nextId.current++,
+        x: selectedGroundLane,
+        y: CHEESE_GROUND_Y,
+        z,
+        isAirborne: false,
+        superCoin,
+        value: superCoin ? 20 : 5,
+      })
+    })
+  } else {
+    // Ground level only
+    zValues.forEach((z) => {
+      const superCoin = coinsSpawned.current++ % 11 === 10
+      result.push({
+        id: nextId.current++,
+        x: lane,
+        y: CHEESE_GROUND_Y,
+        z,
+        isAirborne: false,
+        superCoin,
+        value: superCoin ? 20 : 5,
+      })
+    })
+  }
+
+  return result
 }
 
-function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, onCoin }) {
+function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, cheeseRequests, magnetActive, rocketActive, onCoin }) {
   const [coins, setCoins] = useState([])
   const live = useRef([])
-  const positions = useRef(new Map())
+  const positions = positionsRef
   const timer = useRef(0)
   const nextId = useRef(0)
   const coinsSpawned = useRef(0)
+  const wasFlightMode = useRef(false)
 
   const commit = (items) => {
     live.current = items
@@ -578,15 +1054,41 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, onCoin }) {
     commit(live.current.filter((coin) => coin.id !== id))
   }
 
+  useEffect(() => {
+    if (rocketActive && !wasFlightMode.current) {
+      // Remove stale ground cheese and force the first airborne line to spawn
+      // on the very next render frame.
+      live.current.forEach((coin) => positions.current.delete(coin.id))
+      live.current = []
+      commit([])
+      timer.current = 0
+    } else if (!rocketActive && wasFlightMode.current) {
+      // Airborne cheese disappears as soon as Flight Mode ends.
+      const groundCoins = live.current.filter((coin) => !coin.isAirborne)
+      live.current.forEach((coin) => {
+        if (coin.isAirborne) positions.current.delete(coin.id)
+      })
+      commit(groundCoins)
+    }
+    wasFlightMode.current = rocketActive
+  }, [rocketActive, positions])
+
   useFrame((_, delta) => {
     if (!active) return
     timer.current -= delta
-    if (timer.current <= 0) {
-      const line = makeCoinLine(obstaclesRef.current, positions.current, nextId, coinsSpawned)
-      line.forEach((coin) => positions.current.set(coin.id, { x: coin.x, z: coin.z }))
-      if (line.length) commit([...live.current, ...line])
-      timer.current = 1.5
+    if (timer.current > 0 || (!rocketActive && cheeseRequests.current === 0)) return
+    const startDistance = rocketActive
+      ? (live.current.length === 0 ? 6 : 24)
+      : (live.current.length === 0 ? 5 : 80)
+    const line = makeCoinLine(obstaclesRef.current, positions.current, nextId, coinsSpawned, playerRef, startDistance, rocketActive)
+    if (!line.length) return
+    if (!rocketActive) {
+      // oxlint-disable-next-line react/immutability
+      cheeseRequests.current -= 1
     }
+    line.forEach((coin) => positions.current.set(coin.id, { x: coin.x, z: coin.z }))
+    commit([...live.current, ...line])
+    timer.current = rocketActive ? 0.3 : 0.5
   })
 
   return coins.map((coin) => (
@@ -597,6 +1099,7 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, onCoin }) {
       playerRef={playerRef}
       speedRef={speedRef}
       obstaclesRef={obstaclesRef}
+      magnetActive={magnetActive}
       onCollect={(id, value) => { remove(id); onCoin(value) }}
       onRemove={remove}
       onMove={(id, x, z) => positions.current.set(id, { x, z })}
@@ -687,30 +1190,6 @@ function Environment({ active, speedRef }) {
 
   return (
     <>
-      <mesh position={[-5, 2, -35]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
-        <planeGeometry args={[82, 5]} />
-        <meshStandardMaterial color="#f7dfb5" side={DoubleSide} roughness={0.9} flatShading />
-      </mesh>
-      <mesh position={[5, 2, -35]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
-        <planeGeometry args={[82, 5]} />
-        <meshStandardMaterial color="#c9e4cf" side={DoubleSide} roughness={0.9} flatShading />
-      </mesh>
-      <mesh position={[-4.92, 0.03, -35]} castShadow receiveShadow>
-        <boxGeometry args={[0.12, 1.2, 82]} />
-        <meshStandardMaterial color="#f0c49b" roughness={0.9} flatShading />
-      </mesh>
-      <mesh position={[4.92, 0.03, -35]} castShadow receiveShadow>
-        <boxGeometry args={[0.12, 1.2, 82]} />
-        <meshStandardMaterial color="#a9cdb2" roughness={0.9} flatShading />
-      </mesh>
-      <mesh position={[-4.88, 0.65, -35]} castShadow>
-        <boxGeometry args={[0.18, 0.12, 82]} />
-        <meshStandardMaterial color="#fff8e7" flatShading />
-      </mesh>
-      <mesh position={[4.88, 0.65, -35]} castShadow>
-        <boxGeometry args={[0.18, 0.12, 82]} />
-        <meshStandardMaterial color="#fff8e7" flatShading />
-      </mesh>
       <KitchenProps />
       <mesh position={[0, GROUND_Y, -35]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow={true}>
         <planeGeometry args={[8, 82]} />
@@ -722,37 +1201,53 @@ function Environment({ active, speedRef }) {
           flatShading
         />
       </mesh>
+      <mesh position={[0, GROUND_Y + 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[4, 1000]} />
+        <meshStandardMaterial color="#b31b1b" roughness={0.9} />
+      </mesh>
       {planks.map((plank, index) => (
         <mesh key={index} ref={(mesh) => (refs.current[index] = mesh)} position={[0, -0.53, plank.z]} castShadow receiveShadow>
           <boxGeometry args={[7.8, 0.02, 0.06]} />
           <meshStandardMaterial color="#e9b872" flatShading />
         </mesh>
       ))}
-      <mesh position={[-5, -0.25, -35]} castShadow receiveShadow>
-        <boxGeometry args={[0.2, 0.6, 82]} />
-        <meshStandardMaterial color="#fff1d6" flatShading />
-      </mesh>
-      <mesh position={[5, -0.25, -35]} castShadow receiveShadow>
-        <boxGeometry args={[0.2, 0.6, 82]} />
-        <meshStandardMaterial color="#fff1d6" flatShading />
-      </mesh>
     </>
   )
 }
 
-function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseSpeed, maxSpeed, onScore, onCaught, onCoin }) {
+function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseSpeed, maxSpeed, invincibleTime, magnetActive, rocketActive, highQuality, showFps, onFps, onScore, onCaught, onMilk, onMagnet, onRocket, onCoin }) {
   const player = useRef()
   const cat = useRef()
   const obstacles = useRef([])
   const score = useRef(0)
   const lastScore = useRef(0)
   const currentSpeed = useRef(baseSpeed)
-  const hitCooldown = useRef(0)
+  const playerStats = useRef({ hits: 0, lastHitTime: 0, invincibleUntil: 0 })
+  const fpsElapsed = useRef(0)
+  const fpsFrames = useRef(0)
+  const coinPositions = useRef(new Map())
+  const cheeseRequests = useRef(INITIAL_CHEESE_REQUESTS)
+  const flightModeRef = useRef(false)
+  const playerBounds = useMemo(() => new Box3(), [])
+  const pickupBounds = useMemo(() => new Box3(), [])
+  const obstacleBounds = useMemo(() => new Box3(), [])
 
-  useFrame((_, delta) => {
+  useEffect(() => {
+    particleEmitter.setEnabled(highQuality)
+  }, [highQuality])
+
+  useFrame((state, delta) => {
+    if (showFps) {
+      fpsElapsed.current += delta
+      fpsFrames.current += 1
+      if (fpsElapsed.current >= 0.5) {
+        onFps(Math.round(fpsFrames.current / fpsElapsed.current))
+        fpsElapsed.current = 0
+        fpsFrames.current = 0
+      }
+    }
     if (isPaused || isCaught) return
     if (!active) return
-    hitCooldown.current = Math.max(0, hitCooldown.current - delta)
     currentSpeed.current = Math.min(currentSpeed.current + delta * 0.4, maxSpeed)
     score.current += delta * currentSpeed.current
     if (Math.floor(score.current) !== lastScore.current) {
@@ -760,19 +1255,60 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       onScore(lastScore.current)
     }
 
-    for (const obstacle of obstacles.current) {
-      const px = player.current.position.x
-      const pz = player.current.position.z
-      const ox = obstacle.x
-      const oz = obstacle.z
-      const hitXZ = Math.abs(px - ox) < 0.6 && Math.abs(pz - oz) < 0.6
-      const hitJumpObject = ['book', 'milk', 'trap'].includes(obstacle.type) && hitXZ && player.current.position.y < 0.5
-      const hitTable = obstacle.type === 'table' && hitXZ && player.current.scale.y === 1
+    if (!player.current) return
+    player.current.updateMatrixWorld(true)
+    playerBounds.setFromObject(player.current)
+    pickupBounds.copy(playerBounds).expandByScalar(0.28)
 
-      if (hitCooldown.current === 0 && (hitJumpObject || hitTable)) {
-        hitCooldown.current = 1.5
+    for (const obstacle of obstacles.current) {
+      let pickupHit = false
+      let collision = false
+      if (obstacle.object) {
+        obstacle.object.updateMatrixWorld(true)
+        obstacleBounds.setFromObject(obstacle.object)
+        // Sweep the current obstacle box backward by this frame's travel to
+        // prevent fast objects from tunneling through the player.
+        // oxlint-disable-next-line react/immutability
+        obstacleBounds.min.z -= currentSpeed.current * delta
+        pickupHit = pickupBounds.intersectsBox(obstacleBounds)
+        collision = playerBounds.intersectsBox(obstacleBounds)
+      } else {
+        const px = player.current.position.x
+        const pz = player.current.position.z
+        pickupHit = Math.abs(px - obstacle.x) < 0.75 && Math.abs(pz - obstacle.z) < 0.85
+        collision = Math.abs(px - obstacle.x) < 0.4 && Math.abs(pz - obstacle.z) < 0.4
+      }
+      if (obstacle.type === 'milkBowl' && pickupHit) {
+        playMilkSound()
+        particleEmitter.emitPowerupPickup(player.current.position.x, player.current.position.y + 0.3, player.current.position.z, 'milk')
+        playerStats.current.invincibleUntil = state.clock.elapsedTime + 5
         obstacle.z = 2
-        onCaught(score.current)
+        onMilk()
+        continue
+      }
+      if (obstacle.type === 'magnet' && pickupHit) {
+        playMagnetSound()
+        particleEmitter.emitPowerupPickup(player.current.position.x, player.current.position.y + 0.3, player.current.position.z, 'magnet')
+        obstacle.z = 2
+        onMagnet()
+        continue
+      }
+      if (obstacle.type === 'rocket' && pickupHit) {
+        playRocketTakeSound()
+        particleEmitter.emitPowerupPickup(player.current.position.x, player.current.position.y + 0.3, player.current.position.z, 'rocket')
+        obstacle.z = 2
+        onRocket()
+        continue
+      }
+      if (flightModeRef.current || rocketActive) continue
+      if (invincibleTime > 0 || playerStats.current.invincibleUntil > state.clock.elapsedTime) continue
+      if (collision && state.clock.elapsedTime - playerStats.current.lastHitTime > 1.5) {
+        if (obstacle.type === 'mousetrap') playMouseTrapSound()
+        particleEmitter.emitImpactBurst(player.current.position.x, player.current.position.y + 0.25, player.current.position.z, obstacle.type)
+        playerStats.current.lastHitTime = state.clock.elapsedTime
+        obstacle.z = 2
+        if (obstacle.type !== 'mousetrap') playerStats.current.hits += 1
+        onCaught(score.current, obstacle.type === 'mousetrap')
         break
       }
     }
@@ -780,149 +1316,171 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
 
   return (
     <>
-      <Camera isCaught={isCaught} cinematic={cinematic} />
-      <Lighting theme={theme} />
+      <Camera isCaught={isCaught} cinematic={cinematic} flightActive={rocketActive} />
+      <GraphicsQualityManager quality={highQuality ? 'high' : 'low'} />
+      <Lighting theme={theme} highQuality={highQuality} />
       <SkyEnvironment active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
-      <SideScenery active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
+      <SideScenery active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} highQuality={highQuality} />
       <Environment active={active && !isPaused && !isCaught} speedRef={currentSpeed} />
       {cinematic && <MenuDecor />}
-      <Mouse playerRef={player} active={active && !isPaused && !isCaught} cinematic={cinematic} />
-      <Cat catRef={cat} playerRef={player} active={active && !isPaused} isCaught={isCaught} />
+      <AtmosphericParticles active={highQuality && active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
+      <ParticleEffects active={highQuality && active && !isPaused} />
+      <FlightSpeedStreaks active={highQuality && rocketActive} />
+      <Mouse
+        playerRef={player}
+        active={active && !isPaused && !isCaught}
+        cinematic={cinematic}
+        magnetActive={magnetActive}
+        rocketActive={rocketActive}
+        flightModeRef={flightModeRef}
+        highQuality={highQuality}
+      />
+      <Cat catRef={cat} playerRef={player} playerStats={playerStats} active={active && !isPaused} isCaught={isCaught} highQuality={highQuality} />
       <Obstacles
         active={active && !isPaused}
-        baseSpeed={baseSpeed}
         obstaclesRef={obstacles}
         speedRef={currentSpeed}
+        playerRef={player}
+        coinPositions={coinPositions}
+        cheeseRequests={cheeseRequests}
+        onRocket={onRocket}
+        highQuality={highQuality}
       />
       <CoinSpawner
         active={active && !isPaused && !isCaught}
         speedRef={currentSpeed}
         obstaclesRef={obstacles}
         playerRef={player}
+        positionsRef={coinPositions}
+        cheeseRequests={cheeseRequests}
+        magnetActive={magnetActive}
+        rocketActive={rocketActive}
         onCoin={onCoin}
       />
     </>
   )
 }
 
-function MenuBackground({ theme }) {
-  return (
-    <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 3.5, 7], fov: 55 }}>
-      <GameScene
-        active={false}
-        isPaused={false}
-        isCaught={false}
-        cinematic
-        theme={theme}
-        baseSpeed={6}
-        maxSpeed={18}
-        onScore={() => {}}
-        onCaught={() => {}}
-        onCoin={() => {}}
-      />
-      <EffectComposer multisampling={0} enableNormalPass>
-        <SSAO radius={0.25} intensity={1.2} luminanceInfluence={0.7} samples={16} />
-      </EffectComposer>
-    </Canvas>
-  )
-}
-
-function MainMenu({ onStart, onHighScore, onExit, theme, onTheme }) {
-  const [difficulty, setDifficulty] = useState('Easy')
-  const [speed, setSpeed] = useState(DIFFICULTIES.Easy.baseSpeed)
-  const profile = DIFFICULTIES[difficulty]
-  const motion = 'transition-transform hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
-  const option = (selected) => `rounded-xl border-4 border-black px-3 py-2 uppercase font-black tracking-wider ${motion} ${selected ? 'bg-yellow-400 text-black' : 'bg-cyan-400 text-black'}`
-
-  const chooseDifficulty = (name) => {
-    setDifficulty(name)
-    setSpeed(DIFFICULTIES[name].baseSpeed)
-  }
-
-  return (
-    <div className="flex min-h-screen w-full flex-col items-center justify-center bg-black/50 px-4 py-8 text-white backdrop-blur-sm sm:px-6">
-      <div className="w-full max-w-md rounded-2xl border-4 border-black bg-amber-900 p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] sm:p-8">
-        <div className="text-center">
-          <div className="mb-2 text-4xl" aria-hidden="true">🧀</div>
-          <h1 className="text-5xl uppercase font-black tracking-wider text-yellow-400 drop-shadow-[3px_3px_0px_#000] sm:text-6xl">Cheese Chase</h1>
-          <p className="mt-4 text-sm font-bold text-yellow-50">Dodge the blocks and stay on the road.</p>
-        </div>
-
-        <div className="mt-8">
-          <p className="mb-3 uppercase font-black tracking-wider text-yellow-100">Theme</p>
-          <div className="mb-6 grid grid-cols-2 gap-3">
-            {['day', 'night'].map((mode) => (
-              <button key={mode} onClick={() => onTheme(mode)} className={option(theme === mode)}>
-                {mode === 'day' ? '☀ ' : '☾ '}{mode}
-              </button>
-            ))}
-          </div>
-          <p className="mb-3 uppercase font-black tracking-wider text-yellow-100">Difficulty</p>
-          <div className="grid grid-cols-3 gap-2">
-            {Object.keys(DIFFICULTIES).map((name) => (
-              <button key={name} onClick={() => chooseDifficulty(name)} className={option(difficulty === name)}>
-                {name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <label className="mt-6 block font-bold text-yellow-50">
-          Starting speed: <b className="text-yellow-300">{speed}</b>
-          <input type="range" min="1" max="10" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} className="mt-3 w-full accent-yellow-400" />
-          <span className="mt-1 flex justify-between text-xs font-black"><span>1</span><span>10</span></span>
-        </label>
-
-        <p className="mt-4 text-center text-xs font-bold text-yellow-100">Max speed: {profile.maxSpeed} · A/D or ←/→ to move</p>
-        <div className="mt-6 space-y-4">
-          <button onClick={() => onStart({ baseSpeed: speed, maxSpeed: profile.maxSpeed })} className={`w-full rounded-xl border-4 border-black bg-yellow-400 px-4 py-3 uppercase font-black tracking-wider text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${motion}`}>▶ Start Game</button>
-          <button onClick={onHighScore} className={`w-full rounded-xl border-4 border-black bg-cyan-400 px-4 py-3 uppercase font-black tracking-wider text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${motion}`}>🏆 High Score</button>
-          <button onClick={onExit} className={`w-full rounded-xl border-4 border-black bg-cyan-400 px-4 py-3 uppercase font-black tracking-wider text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${motion}`}>↪ Exit Game</button>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 function HighScore({ score, onBack }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#070b1a] text-center text-white">
-      <div className="p-6">
-        <p className="font-mono text-xs uppercase tracking-[0.3em] text-cyan-300">Best run</p>
-        <h1 className="mt-3 text-6xl font-black">{score}</h1>
-        <button onClick={onBack} className="menu-button mt-8">Back to Menu</button>
+    <div className="font-cartoon flex min-h-screen items-center justify-center bg-[#291710] px-4 text-center text-white select-none">
+      <div className="w-full max-w-sm rounded-[32px] bg-[#3e261d] p-8 shadow-[inset_0_1px_1px_rgba(255,255,255,0.18),0_20px_45px_rgba(0,0,0,0.65)] border border-[#523326]/60">
+        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#543426] text-3xl">
+          🏆
+        </div>
+        <p className="text-xs font-bold uppercase tracking-widest text-[#cbb39e]">Best Run</p>
+        <h1 className="mt-2 text-6xl font-black text-[#fed23a]">{score}</h1>
+        <p className="mt-2 text-sm text-[#ba9f8b]">Keep running to beat your record!</p>
+        <button
+          type="button"
+          onClick={onBack}
+          className="mt-7 w-full btn-3d-yellow py-3 rounded-2xl font-bold text-base"
+        >
+          Back to Menu
+        </button>
       </div>
     </div>
   )
 }
 
-function UIOverlay({ score, coinCount, isPaused, gameOver, onRestart, onMenu, onResume }) {
+function UIOverlay({ score, coinCount, fps, showFps, soundEnabled, onToggleSound, graphicsQuality, onToggleGraphicsQuality, invincibleTime, magnetTime, rocketTime, isPaused, gameOver, onRestart, onMenu, onResume }) {
   return (
-    <div className="font-cartoon pointer-events-none absolute inset-0">
-      <div className="absolute left-5 top-5 border border-cyan-300/20 bg-slate-950/75 px-4 py-2 font-mono text-xs text-slate-400">
-        <span className="font-black text-yellow-300">CHEESE CHASE</span> · A/D or ←/→
+    <div className="font-cartoon pointer-events-none absolute inset-0 select-none">
+      <WindSpeedOverlay active={rocketTime > 0} />
+      <div className="absolute left-5 top-5 rounded-xl border border-[#fed23a]/30 bg-[#321c13]/85 px-4 py-2 text-xs text-[#d8c3b0] shadow-lg backdrop-blur-sm">
+        <span className="font-black text-[#fed23a]">CHEESE CHASE</span> · A/D or ←/→
       </div>
-      <div className="absolute right-5 top-5 flex gap-4 border border-cyan-300/30 bg-slate-950/75 px-4 py-2 font-mono text-sm">
-        <span className="font-black text-cyan-200">SCORE {score.toString().padStart(4, '0')}</span>
-        <span className="font-black text-yellow-300">CHEESE: {coinCount}</span>
+      <div className="absolute right-5 top-5 flex gap-4 rounded-xl border border-[#fed23a]/30 bg-[#321c13]/85 px-4 py-2 text-sm text-white shadow-lg backdrop-blur-sm">
+        <span className="font-black text-[#ffd369]">SCORE {score.toString().padStart(4, '0')}</span>
+        <span className="font-black text-[#ffbd38]">🧀 {coinCount}</span>
       </div>
+      <div className="pointer-events-auto absolute left-5 top-[4.5rem] z-20 flex max-w-[calc(100vw-2.5rem)] flex-row items-center gap-3">
+        {showFps && <div className="whitespace-nowrap rounded-xl border border-[#86efac]/30 bg-[#321c13]/85 px-3 py-1.5 text-xs font-black text-[#86efac] shadow-lg backdrop-blur-sm">{fps} FPS</div>}
+        <button
+          type="button"
+          onClick={onToggleSound}
+          className="whitespace-nowrap rounded-xl border border-[#fed23a]/30 bg-[#321c13]/85 px-3 py-1.5 text-xs font-black text-[#fed23a] shadow-lg"
+          aria-pressed={soundEnabled}
+          aria-label="Toggle sound"
+        >
+          {soundEnabled ? '🔊 Sound' : '🔇 Muted'}
+        </button>
+      </div>
+      <button
+        type="button"
+        onClick={onToggleGraphicsQuality}
+        className="pointer-events-auto absolute left-5 top-[7.5rem] z-20 rounded-xl border border-[#fed23a]/30 bg-[#321c13]/85 px-3 py-1.5 text-xs font-black text-[#fed23a] shadow-lg"
+        aria-label="Toggle graphics quality"
+      >
+        Graphics: {graphicsQuality === 'high' ? 'High' : 'Low'}
+      </button>
+      
+      {/* Active Power-up Badges */}
+      <div className="absolute top-24 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2.5 pointer-events-none">
+        {invincibleTime > 0 && (
+          <div className="bg-blue-500 border-4 border-black text-white font-black text-2xl sm:text-3xl px-6 py-2 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-bounce flex items-center gap-2">
+            <span>🥛</span> MILK POWER: {invincibleTime}s
+          </div>
+        )}
+        {magnetTime > 0 && (
+          <div className="bg-gradient-to-r from-red-600 to-amber-500 border-4 border-black text-white font-black text-2xl sm:text-3xl px-6 py-2 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-pulse flex items-center gap-2">
+            <span>🧲</span> MAGNET: {magnetTime}s
+          </div>
+        )}
+        {rocketTime > 0 && (
+          <div className="bg-gradient-to-r from-orange-500 to-yellow-400 border-4 border-black text-white font-black text-2xl sm:text-3xl px-6 py-2 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-pulse flex items-center gap-2">
+            <span>🚀</span> FLIGHT MODE: {rocketTime}s
+          </div>
+        )}
+      </div>
+
       {isPaused && !gameOver && (
-        <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-slate-950/70 p-6">
-          <div className="w-full max-w-sm border border-cyan-300/40 bg-slate-950 p-7 text-center text-white">
-            <p className="font-mono text-xs uppercase tracking-[0.3em] text-cyan-300">Game paused</p>
-            <h1 className="mt-3 text-4xl font-black">PAUSED</h1>
-            <button onClick={onResume} className="menu-button mt-6">Resume</button>
+        <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-[30px] border border-[#523326]/70 bg-[#3e261d] p-7 text-center text-white shadow-2xl">
+            <p className="text-xs font-bold uppercase tracking-widest text-[#cbb39e]">Game Paused</p>
+            <h1 className="mt-2 text-4xl font-black text-[#fed23a]">PAUSED</h1>
+            <div className="mt-6 space-y-3">
+              <button
+                type="button"
+                onClick={onResume}
+                className="w-full btn-3d-yellow py-2.5 rounded-2xl font-bold text-base"
+              >
+                Resume
+              </button>
+              <button
+                type="button"
+                onClick={onMenu}
+                className="w-full btn-3d-brown py-2.5 rounded-2xl font-bold text-sm"
+              >
+                Back to Menu
+              </button>
+            </div>
           </div>
         </div>
       )}
       {gameOver && (
-        <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-slate-950/65 p-6">
-          <div className="w-full max-w-sm border border-red-400/40 bg-slate-950 p-7 text-center text-white">
-            <p className="font-mono text-xs uppercase tracking-[0.3em] text-red-300">Run ended</p>
-            <h1 className="mt-3 text-4xl font-black">Game over</h1>
-            <p className="mt-3 text-slate-300">Final score: {score}</p>
-            <button onClick={onRestart} className="menu-button mt-6">Restart</button>
-            <button onClick={onMenu} className="mt-3 text-sm text-slate-400 underline">Menu</button>
+        <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-black/65 p-6 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-[30px] border border-[#523326]/70 bg-[#3e261d] p-7 text-center text-white shadow-2xl">
+            <p className="text-xs font-bold uppercase tracking-widest text-[#ff7979]">Run Ended</p>
+            <h1 className="mt-2 text-4xl font-black text-[#fed23a]">Game Over</h1>
+            <p className="mt-2 text-[#d8c3b0]">Final Score: <strong className="text-white text-lg">{score}</strong></p>
+            <div className="mt-6 space-y-3">
+              <button
+                type="button"
+                onClick={onRestart}
+                className="w-full btn-3d-yellow py-2.5 rounded-2xl font-bold text-base"
+              >
+                Restart
+              </button>
+              <button
+                type="button"
+                onClick={onMenu}
+                className="w-full btn-3d-brown py-2.5 rounded-2xl font-bold text-sm"
+              >
+                Back to Menu
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -934,13 +1492,20 @@ export default function App() {
   const [screen, setScreen] = useState('menu')
   const [score, setScore] = useState(0)
   const [coinCount, setCoinCount] = useState(0)
+  const [fps, setFps] = useState(0)
+  const [showFps, setShowFps] = useState(() => readFpsPreference())
+  const [soundEnabled, setSoundEnabled] = useState(() => readSoundPreference())
+  const [graphicsQuality, setGraphicsQuality] = useState(() => readGraphicsQuality())
+  const [invincibleTime, setInvincibleTime] = useState(0)
+  const [magnetTime, setMagnetTime] = useState(0)
+  const [rocketTime, setRocketTime] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
   const [isCaught, setIsCaught] = useState(false)
   const [theme, setTheme] = useState('day')
   const catchTimer = useRef()
   const [best, setBest] = useState(() => readBest())
   const [run, setRun] = useState(0)
-  const [settings, setSettings] = useState(DIFFICULTIES.Medium)
+  const [settings, setSettings] = useState(DIFFICULTIES.Easy)
   const hits = useRef(0)
 
   useEffect(() => {
@@ -953,13 +1518,42 @@ export default function App() {
     return () => window.removeEventListener('keydown', togglePause)
   }, [screen])
 
+  const toggleGraphicsQuality = () => {
+    setGraphicsQuality((quality) => {
+      const nextQuality = quality === 'high' ? 'low' : 'high'
+      localStorage.setItem(GRAPHICS_QUALITY_KEY, nextQuality)
+      return nextQuality
+    })
+  }
+
+  const toggleSound = () => {
+    setSoundEnabled((enabled) => {
+      const nextEnabled = !enabled
+      setSoundMuted(!nextEnabled)
+      return nextEnabled
+    })
+  }
+
+  const toggleFps = () => {
+    setShowFps((value) => {
+      const nextValue = !value
+      localStorage.setItem(FPS_KEY, String(nextValue))
+      return nextValue
+    })
+  }
+
   const start = (nextSettings = settings) => {
+    startAudio()
     clearTimeout(catchTimer.current)
     setSettings(nextSettings)
     setIsPaused(false)
     setIsCaught(false)
     setScore(0)
     setCoinCount(0)
+    setFps(0)
+    setInvincibleTime(0)
+    setMagnetTime(0)
+    setRocketTime(0)
     hits.current = 0
     setRun((value) => value + 1)
     setScreen('playing')
@@ -975,39 +1569,93 @@ export default function App() {
     setScreen('gameover')
   }
 
-  const caught = (finalScore) => {
+  const caught = (finalScore, instant = false) => {
     if (isCaught) return
-    hits.current += 1
+    const nextHits = hits.current + 1
+    hits.current = nextHits
     setIsCaught(true)
     clearTimeout(catchTimer.current)
-    if (hits.current >= 2) {
-      catchTimer.current = setTimeout(() => gameOver(finalScore), 1500)
+    if (instant || nextHits >= 2) {
+      playGameOverSound()
+      catchTimer.current = setTimeout(() => gameOver(finalScore), instant ? 500 : 1500)
     } else {
+      playFirstHitSound()
       catchTimer.current = setTimeout(() => setIsCaught(false), 1000)
     }
   }
 
   useEffect(() => () => clearTimeout(catchTimer.current), [])
 
+  useEffect(() => {
+    if (invincibleTime <= 0) return undefined
+    const timer = setInterval(() => setInvincibleTime((time) => Math.max(0, time - 1)), 1000)
+    return () => clearInterval(timer)
+  }, [invincibleTime])
+
+  useEffect(() => {
+    if (magnetTime <= 0) return undefined
+    const timer = setInterval(() => setMagnetTime((time) => Math.max(0, time - 1)), 1000)
+    return () => clearInterval(timer)
+  }, [magnetTime])
+
+  useEffect(() => {
+    if (rocketTime <= 0) return undefined
+    const timer = setInterval(() => setRocketTime((time) => Math.max(0, time - 1)), 1000)
+    return () => clearInterval(timer)
+  }, [rocketTime])
+
   if (screen === 'menu') {
     return (
-      <div className="relative min-h-screen w-full overflow-hidden bg-[#3b2117]">
-        <div className="absolute inset-0 scale-105 blur-[3px]">
-          <MenuBackground theme={theme} />
+      <ThreeMenuCanvas theme={theme} graphicsQuality={graphicsQuality}>
+        <div className="pointer-events-none absolute inset-0 z-10 overflow-y-auto overscroll-contain p-3 sm:p-4">
+          <div className="pointer-events-auto flex min-h-full w-full items-center justify-center py-2 sm:py-4">
+            <MainMenu
+              theme={theme}
+              onTheme={setTheme}
+              showFps={showFps}
+              onToggleFps={toggleFps}
+              graphicsQuality={graphicsQuality}
+              onToggleGraphicsQuality={toggleGraphicsQuality}
+              soundEnabled={soundEnabled}
+              onToggleSound={toggleSound}
+              onStart={start}
+              onHighScore={() => {
+                setBest(readBest())
+                setScreen('highscore')
+              }}
+              onExit={() => setScreen('exit')}
+            />
+          </div>
         </div>
-        <div className="relative z-10">
-          <MainMenu theme={theme} onTheme={setTheme} onStart={start} onHighScore={() => { setBest(readBest()); setScreen('highscore') }} onExit={() => setScreen('exit')} />
+      </ThreeMenuCanvas>
+    )
+  }
+
+  if (screen === 'highscore') return <HighScore score={best} onBack={() => setScreen('menu')} />
+  if (screen === 'exit') {
+    return (
+      <div className="font-cartoon flex min-h-screen items-center justify-center bg-[#291710] p-4 text-center text-white select-none">
+        <div className="w-full max-w-sm rounded-[32px] bg-[#3e261d] p-8 shadow-2xl border border-[#523326]/60">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#543426] text-3xl">
+            🧀
+          </div>
+          <h1 className="text-3xl font-black text-[#fed23a]">Thanks for Playing!</h1>
+          <p className="mt-3 text-sm text-[#ba9f8b]">Cheese Chase POC Demo</p>
+          <button
+            type="button"
+            onClick={() => setScreen('menu')}
+            className="mt-6 w-full btn-3d-yellow py-3 rounded-2xl font-bold text-base"
+          >
+            Play Again
+          </button>
         </div>
       </div>
     )
   }
 
-  if (screen === 'highscore') return <HighScore score={best} onBack={() => setScreen('menu')} />
-  if (screen === 'exit') return <div className="flex min-h-screen items-center justify-center bg-black text-white">Thanks for playing</div>
-
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-[#3b2117]">
-      <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 3.5, 7], fov: 55 }}>
+      <Canvas shadows={graphicsQuality === 'high'} dpr={graphicsQuality === 'high' ? [1, 1.5] : [1, 1]} camera={{ position: [0, 3.5, 7], fov: 55 }}>
         <GameScene
           key={run}
           active={screen === 'playing'}
@@ -1017,17 +1665,40 @@ export default function App() {
           theme={theme}
           baseSpeed={settings.baseSpeed}
           maxSpeed={settings.maxSpeed}
+          invincibleTime={invincibleTime}
+          magnetActive={magnetTime > 0}
+          rocketActive={rocketTime > 0}
+          highQuality={graphicsQuality === 'high'}
+          showFps={showFps}
+          onFps={setFps}
           onScore={setScore}
-          onCoin={(value) => setCoinCount((total) => total + value)}
+          onCoin={(value) => {
+            playCheeseCollectSound()
+            setCoinCount((total) => total + value)
+          }}
+          onMilk={() => setInvincibleTime(5)}
+          onMagnet={() => setMagnetTime(8)}
+          onRocket={() => setRocketTime(10)}
           onCaught={caught}
         />
-        <EffectComposer multisampling={0} enableNormalPass>
-          <SSAO radius={0.25} intensity={1.2} luminanceInfluence={0.7} samples={16} />
-        </EffectComposer>
+        {graphicsQuality === 'high' && (
+          <EffectComposer multisampling={0} enableNormalPass>
+            <SSAO radius={0.25} intensity={1.2} luminanceInfluence={0.7} samples={16} />
+          </EffectComposer>
+        )}
       </Canvas>
       <UIOverlay
         score={score}
         coinCount={coinCount}
+        fps={fps}
+        showFps={showFps}
+        soundEnabled={soundEnabled}
+        onToggleSound={toggleSound}
+        graphicsQuality={graphicsQuality}
+        onToggleGraphicsQuality={toggleGraphicsQuality}
+        invincibleTime={invincibleTime}
+        magnetTime={magnetTime}
+        rocketTime={rocketTime}
         isPaused={isPaused}
         gameOver={screen === 'gameover'}
         onRestart={() => start(settings)}

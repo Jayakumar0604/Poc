@@ -1,0 +1,11 @@
+Model Information:
+* title:	Low-Poly Mousetrap
+* source:	https://sketchfab.com/3d-models/low-poly-mousetrap-94f16aabecc74f90a06ed19a0b460f8f
+* author:	TepidGames (https://sketchfab.com/TepidGames)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Low-Poly Mousetrap" (https://sketchfab.com/3d-models/low-poly-mousetrap-94f16aabecc74f90a06ed19a0b460f8f) by TepidGames (https://sketchfab.com/TepidGames) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

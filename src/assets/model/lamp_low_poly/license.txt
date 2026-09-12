@@ -1,0 +1,11 @@
+Model Information:
+* title:	Lamp (low poly)
+* source:	https://sketchfab.com/3d-models/lamp-low-poly-efe0d6af468d4b2eb558f597a1afbd48
+* author:	phantom8364 (https://sketchfab.com/phantom8364)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Lamp (low poly)" (https://sketchfab.com/3d-models/lamp-low-poly-efe0d6af468d4b2eb558f597a1afbd48) by phantom8364 (https://sketchfab.com/phantom8364) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

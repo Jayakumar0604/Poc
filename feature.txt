@@ -1,0 +1,19 @@
+Implement a 'Graphics Quality' toggle (High/Low) in the game's UI to optimize performance and fix lag issues. Create a settings menu with this toggle and bind it to a graphics manager function.
+
+When Toggle is ON (High Quality):
+
+Lighting: Enable HemisphereLight and DirectionalLight with castShadow = true. Use PCFSoftShadowMap for realistic shadows. Enable dynamic PointLights on wall lamps.
+
+Particles & VFX: Enable high-density volumetric particle systems for the Rocket/Flight mode fire effect and collectible effects.
+
+Spawning: Maintain high-density object spawning.
+
+When Toggle is OFF (Performance/Low Quality):
+
+Lighting: Disable all dynamic PointLights. Turn off all shadow casting and receiving (castShadow = false, receiveShadow = false). Use only basic AmbientLight and a simple DirectionalLight without shadows.
+
+Particles & VFX: Completely disable the fire particle emitters and replace them with a simple, static low-poly mesh (e.g., a simple cone) for the rocket exhaust. Disable all floating particle visual effects.
+
+Renderer: Lower the pixelRatio slightly if necessary to prioritize maintaining a stable 60 FPS.
+
+Ensure the toggle immediately updates the scene renderer, lighting, and particle systems without needing to restart the game.
