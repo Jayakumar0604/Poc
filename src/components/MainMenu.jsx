@@ -75,13 +75,15 @@ function GearIcon() {
  * @param {(theme: string) => void} props.onTheme
  * @param {boolean} props.showFps
  * @param {() => void} props.onToggleFps
+ * @param {boolean} props.soundEnabled
+ * @param {() => void} props.onToggleSound
  * @param {'high'|'low'} props.graphicsQuality
  * @param {() => void} props.onToggleGraphicsQuality
  * @param {(settings: { baseSpeed: number, maxSpeed: number, difficulty: string }) => void} props.onStart
  * @param {() => void} props.onHighScore
  * @param {() => void} props.onExit
  */
-export default function MainMenu({ theme, showFps, onTheme, onToggleFps, graphicsQuality = 'high', onToggleGraphicsQuality, onStart, onHighScore, onExit }) {
+export default function MainMenu({ theme, showFps, onTheme, onToggleFps, graphicsQuality = 'high', onToggleGraphicsQuality, soundEnabled, onToggleSound, onStart, onHighScore, onExit }) {
   const [difficulty, setDifficulty] = useState('Easy')
   const [speed, setSpeed] = useState(DIFFICULTIES.Easy.baseSpeed)
   const profile = DIFFICULTIES[difficulty]
@@ -155,6 +157,17 @@ export default function MainMenu({ theme, showFps, onTheme, onToggleFps, graphic
           >
             <span>FPS Counter</span>
             <span className="text-[10px] uppercase tracking-wider">{showFps ? 'On' : 'Off'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={onToggleSound}
+            aria-pressed={soundEnabled}
+            className={`mt-1.5 w-full flex items-center justify-between py-1.5 px-3 rounded-xl font-bold text-[12.5px] tracking-wide transition-all ${
+              soundEnabled ? 'btn-3d-green' : 'btn-3d-dark'
+            }`}
+          >
+            <span>{soundEnabled ? '🔊 Sound' : '🔇 Sound'}</span>
+            <span className="text-[10px] uppercase tracking-wider">{soundEnabled ? 'On' : 'Off'}</span>
           </button>
         </div>
 

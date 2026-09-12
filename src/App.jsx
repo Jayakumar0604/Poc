@@ -17,6 +17,7 @@ import RocketModel from './components/RocketModel'
 import { BookObstacle, BOOK_MODEL_CENTER_OFFSET } from './components/BookModel'
 import ParticleEffects from './components/ParticleEffects'
 import { particleEmitter } from './utils/particleEmitter'
+import { playJumpSound, readSoundPreference, setSoundMuted, startAudio } from './utils/audioManager'
 import AtmosphericParticles from './components/AtmosphericParticles'
 import { RocketThrust, FlightSpeedStreaks, MagnetFluxParticles, CatChaseAura } from './components/SpecialEffects'
 import WindSpeedOverlay from './components/WindSpeedOverlay'
@@ -348,6 +349,7 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActiv
       event.preventDefault()
 
       if (jump && grounded.current) {
+        playJumpSound()
         ducking.current = false
         grounded.current = false
         velocity.current = 12
@@ -1429,6 +1431,7 @@ export default function App() {
   const [coinCount, setCoinCount] = useState(0)
   const [fps, setFps] = useState(0)
   const [showFps, setShowFps] = useState(() => readFpsPreference())
+  const [soundEnabled, setSoundEnabled] = useState(() => readSoundPreference())
   const [graphicsQuality, setGraphicsQuality] = useState(() => readGraphicsQuality())
   const [invincibleTime, setInvincibleTime] = useState(0)
   const [magnetTime, setMagnetTime] = useState(0)
@@ -1460,6 +1463,14 @@ export default function App() {
     })
   }
 
+  const toggleSound = () => {
+    setSoundEnabled((enabled) => {
+      const nextEnabled = !enabled
+      setSoundMuted(!nextEnabled)
+      return nextEnabled
+    })
+  }
+
   const toggleFps = () => {
     setShowFps((value) => {
       const nextValue = !value
@@ -1469,6 +1480,7 @@ export default function App() {
   }
 
   const start = (nextSettings = settings) => {
+    startAudio()
     clearTimeout(catchTimer.current)
     setSettings(nextSettings)
     setIsPaused(false)
@@ -1538,6 +1550,8 @@ export default function App() {
               onToggleFps={toggleFps}
               graphicsQuality={graphicsQuality}
               onToggleGraphicsQuality={toggleGraphicsQuality}
+              soundEnabled={soundEnabled}
+              onToggleSound={toggleSound}
               onStart={start}
               onHighScore={() => {
                 setBest(readBest())
