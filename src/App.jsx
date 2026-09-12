@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { EffectComposer, SSAO } from '@react-three/postprocessing'
-import { CanvasTexture, MathUtils, RepeatWrapping } from 'three'
+import { Box3, CanvasTexture, MathUtils, RepeatWrapping } from 'three'
 import MainMenu from './components/MainMenu'
 import ThreeMenuCanvas from './components/ThreeMenuScene'
 import GraphicsQualityManager from './components/GraphicsQualityManager'
@@ -133,11 +133,15 @@ function Lighting({ theme, highQuality }) {
         </>
       ) : (
         <>
-          <ambientLight intensity={day ? 0.8 : 0.3} color={day ? '#fff1d0' : '#443022'} />
+          <hemisphereLight
+            skyColor={day ? '#bfe8ff' : '#31456f'}
+            groundColor={day ? '#6e422f' : '#1b1420'}
+            intensity={day ? 0.9 : 0.5}
+          />
           <directionalLight
             position={[4, 8, 4]}
-            intensity={day ? 0.85 : 0.45}
-            color={day ? '#fff0d0' : '#c28a72'}
+            intensity={day ? 0.9 : 0.55}
+            color={day ? '#ffe6bf' : '#b6c8f0'}
           />
         </>
       )}
@@ -828,7 +832,10 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
       key={index}
       type={item.type}
       position={[item.x, GROUND_Y, item.z]}
-      obstacleRef={(mesh) => (refs.current[index] = mesh)}
+      obstacleRef={(mesh) => {
+        refs.current[index] = mesh
+        item.object = mesh
+      }}
       onRocket={onRocket}
       highQuality={highQuality}
     />
@@ -841,11 +848,24 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, magnetActive,
   const posY = useRef(coin.y)
   const posZ = useRef(coin.z)
   const collected = useRef(false)
+  const cheeseBounds = useMemo(() => new Box3(), [])
+  const playerBounds = useMemo(() => new Box3(), [])
+  const pickupBounds = useMemo(() => new Box3(), [])
 
   useFrame((state, delta) => {
     if (!active || collected.current || !ref.current) return
     const p = playerRef.current ? playerRef.current.position : null
     const t = state.clock.elapsedTime
+    let boundsHit = false
+
+    if (p && playerRef.current && ref.current) {
+      playerRef.current.updateMatrixWorld(true)
+      ref.current.updateMatrixWorld(true)
+      playerBounds.setFromObject(playerRef.current)
+      pickupBounds.copy(playerBounds).expandByScalar(0.12)
+      cheeseBounds.setFromObject(ref.current)
+      boundsHit = !cheeseBounds.isEmpty() && pickupBounds.intersectsBox(cheeseBounds)
+    }
 
     // Player altitude state: player is airborne if elevated during flight
     const isPlayerAirborne = Boolean(p && p.y > GROUND_Y + 1.2)
@@ -921,9 +941,11 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, magnetActive,
       if (
         p &&
         canCollect &&
-        Math.abs(posX.current - p.x) < 0.9 &&
-        Math.abs(posY.current - p.y) < 1.0 &&
-        Math.abs(posZ.current - p.z) < 1.1
+        (boundsHit || (
+          Math.abs(posX.current - p.x) < 0.9 &&
+          Math.abs(posY.current - p.y) < 1.0 &&
+          Math.abs(posZ.current - p.z) < 1.1
+        ))
       ) {
         collected.current = true
         particleEmitter.emitCheeseBurst(posX.current, posY.current, posZ.current, coin.superCoin)
@@ -1205,6 +1227,9 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
   const coinPositions = useRef(new Map())
   const cheeseRequests = useRef(INITIAL_CHEESE_REQUESTS)
   const flightModeRef = useRef(false)
+  const playerBounds = useMemo(() => new Box3(), [])
+  const pickupBounds = useMemo(() => new Box3(), [])
+  const obstacleBounds = useMemo(() => new Box3(), [])
 
   useEffect(() => {
     particleEmitter.setEnabled(highQuality)
@@ -1229,14 +1254,29 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       onScore(lastScore.current)
     }
 
+    if (!player.current) return
+    player.current.updateMatrixWorld(true)
+    playerBounds.setFromObject(player.current)
+    pickupBounds.copy(playerBounds).expandByScalar(0.28)
+
     for (const obstacle of obstacles.current) {
-      const px = player.current.position.x
-      const pz = player.current.position.z
-      const ox = obstacle.x
-      const oz = obstacle.z
-      const hitX = Math.abs(px - ox) < 0.4
-      const hitZ = Math.abs(pz - oz) < 0.4
-      const pickupHit = Math.abs(px - ox) < 0.75 && Math.abs(pz - oz) < 0.85
+      let pickupHit = false
+      let collision = false
+      if (obstacle.object) {
+        obstacle.object.updateMatrixWorld(true)
+        obstacleBounds.setFromObject(obstacle.object)
+        // Sweep the current obstacle box backward by this frame's travel to
+        // prevent fast objects from tunneling through the player.
+        // oxlint-disable-next-line react/immutability
+        obstacleBounds.min.z -= currentSpeed.current * delta
+        pickupHit = pickupBounds.intersectsBox(obstacleBounds)
+        collision = playerBounds.intersectsBox(obstacleBounds)
+      } else {
+        const px = player.current.position.x
+        const pz = player.current.position.z
+        pickupHit = Math.abs(px - obstacle.x) < 0.75 && Math.abs(pz - obstacle.z) < 0.85
+        collision = Math.abs(px - obstacle.x) < 0.4 && Math.abs(pz - obstacle.z) < 0.4
+      }
       if (obstacle.type === 'milkBowl' && pickupHit) {
         playMilkSound()
         particleEmitter.emitPowerupPickup(player.current.position.x, player.current.position.y + 0.3, player.current.position.z, 'milk')
@@ -1260,10 +1300,6 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       }
       if (flightModeRef.current || rocketActive) continue
       if (invincibleTime > 0 || playerStats.current.invincibleUntil > state.clock.elapsedTime) continue
-      const hitJumpObject = ['mousetrap', 'book', 'yarn', 'vacuum'].includes(obstacle.type) && player.current.position.y < 0.5
-      const hitOverhead = OVERHEAD_TYPES.includes(obstacle.type) && player.current.scale.y > 0.6
-      const collision = hitX && hitZ && (hitJumpObject || hitOverhead)
-
       if (collision && state.clock.elapsedTime - playerStats.current.lastHitTime > 1.5) {
         if (obstacle.type === 'mousetrap') playMouseTrapSound()
         particleEmitter.emitImpactBurst(player.current.position.x, player.current.position.y + 0.25, player.current.position.z, obstacle.type)

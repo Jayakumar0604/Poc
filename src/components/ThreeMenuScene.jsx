@@ -481,11 +481,15 @@ export function ThreeMenuScene({ theme, graphicsQuality = 'high' }) {
         </>
       ) : (
         <>
-          <ambientLight intensity={isDay ? 0.8 : 0.3} color={isDay ? '#fff8ec' : '#334166'} />
+          <hemisphereLight
+            skyColor={isDay ? '#bfe8ff' : '#31456f'}
+            groundColor={isDay ? '#6e422f' : '#1b1420'}
+            intensity={isDay ? 0.9 : 0.5}
+          />
           <directionalLight
             position={[4, 8, 4]}
-            intensity={isDay ? 0.8 : 0.45}
-            color={isDay ? '#fff2d6' : '#88a4e0'}
+            intensity={isDay ? 0.85 : 0.5}
+            color={isDay ? '#ffe6bf' : '#b6c8f0'}
           />
         </>
       )}
