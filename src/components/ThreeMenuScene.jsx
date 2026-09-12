@@ -482,14 +482,14 @@ export function ThreeMenuScene({ theme, graphicsQuality = 'high' }) {
       ) : (
         <>
           <hemisphereLight
-            skyColor={isDay ? '#bfe8ff' : '#31456f'}
-            groundColor={isDay ? '#6e422f' : '#1b1420'}
-            intensity={isDay ? 0.9 : 0.5}
+            skyColor={isDay ? '#bfe8ff' : '#0a1128'}
+            groundColor={isDay ? '#6e422f' : '#010205'}
+            intensity={isDay ? 0.9 : 0.35}
           />
           <directionalLight
             position={[4, 8, 4]}
-            intensity={isDay ? 0.85 : 0.5}
-            color={isDay ? '#ffe6bf' : '#b6c8f0'}
+            intensity={isDay ? 0.85 : 0.45}
+            color={isDay ? '#ffe6bf' : '#b8d0fe'}
           />
         </>
       )}

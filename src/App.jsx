@@ -135,14 +135,14 @@ function Lighting({ theme, highQuality }) {
       ) : (
         <>
           <hemisphereLight
-            skyColor={day ? '#bfe8ff' : '#31456f'}
-            groundColor={day ? '#6e422f' : '#1b1420'}
-            intensity={day ? 0.9 : 0.5}
+            skyColor={day ? '#bfe8ff' : '#0a1128'}
+            groundColor={day ? '#6e422f' : '#010205'}
+            intensity={day ? 0.9 : 0.35}
           />
           <directionalLight
             position={[4, 8, 4]}
-            intensity={day ? 0.9 : 0.55}
-            color={day ? '#ffe6bf' : '#b6c8f0'}
+            intensity={day ? 0.9 : 0.45}
+            color={day ? '#ffe6bf' : '#b8d0fe'}
           />
         </>
       )}
