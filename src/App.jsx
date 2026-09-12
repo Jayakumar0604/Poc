@@ -1596,8 +1596,8 @@ export default function App() {
   if (screen === 'menu') {
     return (
       <ThreeMenuCanvas theme={theme} graphicsQuality={graphicsQuality}>
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-4">
-          <div className="pointer-events-auto">
+        <div className="pointer-events-none absolute inset-0 z-10 overflow-y-auto overscroll-contain p-3 sm:p-4">
+          <div className="pointer-events-auto flex min-h-full w-full items-center justify-center py-2 sm:py-4">
             <MainMenu
               theme={theme}
               onTheme={setTheme}

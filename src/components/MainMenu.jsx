@@ -97,14 +97,14 @@ export default function MainMenu({ theme, showFps, onTheme, onToggleFps, graphic
   const sliderFillPercent = ((speed - 1) / 9) * 100
 
   return (
-    <div className="font-cartoon flex flex-col items-center select-none w-full max-w-[340px] sm:max-w-[355px]">
+    <div className="font-cartoon flex w-full max-w-[355px] flex-col items-center select-none">
       {/* 3D Cheese Chase Logo with radiant Cheese Wedge in Three.js WebGL */}
-      <div className="relative -mb-6 z-10 select-none w-[320px] sm:w-[345px] h-[180px] sm:h-[195px] drop-shadow-[0_12px_24px_rgba(0,0,0,0.5)]">
+      <div className="relative z-10 -mb-5 h-[clamp(120px,24vh,195px)] w-[min(86vw,345px)] select-none drop-shadow-[0_12px_24px_rgba(0,0,0,0.5)] sm:-mb-6">
         <CheeseChaseLogo3D graphicsQuality={graphicsQuality} />
       </div>
 
       {/* Main Menu Dark Brown Card */}
-      <div className="w-full rounded-[30px] sm:rounded-[34px] bg-[#3e261d] p-5 sm:p-6 shadow-[inset_0_1px_1px_rgba(255,255,255,0.18),0_20px_45px_rgba(0,0,0,0.65)] border border-[#523326]/60">
+      <div className="w-full rounded-[26px] border border-[#523326]/60 bg-[#3e261d] p-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.18),0_20px_45px_rgba(0,0,0,0.65)] sm:rounded-[34px] sm:p-6">
         {/* Subtitle */}
         <p className="text-center text-[12px] sm:text-[12.5px] font-semibold text-[#cbb39e] mb-3.5 tracking-wide">
           Dodge the blocks and stay on the road.
