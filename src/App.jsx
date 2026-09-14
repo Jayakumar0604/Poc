@@ -28,6 +28,7 @@ import {
   playRocketTakeSound,
   playSwooshSound,
   playToyClatterSound,
+  playMultiplierSound,
   readSoundPreference,
   setSoundMuted,
   startAudio,
@@ -36,6 +37,7 @@ import AtmosphericParticles from './components/AtmosphericParticles'
 import { RocketThrust, FlightSpeedStreaks, MagnetFluxParticles, CatChaseAura } from './components/SpecialEffects'
 import WindSpeedOverlay from './components/WindSpeedOverlay'
 import BreakableToyObstacle from './components/BreakableToyObstacle'
+import MultiplierPickup from './components/MultiplierPickup'
 
 const KEY = 'endless-runner-high-score'
 const FPS_KEY = 'show-fps-counter'
@@ -69,10 +71,12 @@ const rollCheeseTier = () => {
   if (roll < 0.95) return 'blue'
   return 'golden'
 }
+const chooseMultiplierType = () => Math.random() < 0.65 ? 'multiplier2' : 'multiplier3'
 const chooseSpawnType = () => {
   const rand = Math.random()
   if (rand > 0.4) return 'obstacle'
   if (rand > 0.36) return 'toy'
+  if (rand > 0.33) return 'multiplier'
   if (rand > 0.14) return 'cheese'
   if (rand > 0.07) return 'milk'
   if (rand > 0.03) return 'magnet'
@@ -771,6 +775,10 @@ function Obstacle({ type, position, obstacleRef, onRocket, highQuality }) {
   if (type === 'rocket') return <RocketPickup position={position} obstacleRef={obstacleRef} onCollect={onRocket} highQuality={highQuality} />
   if (type === 'magnet') return <MagnetPickup position={position} obstacleRef={obstacleRef} />
   if (type === 'toy') return <BreakableToyObstacle position={position} obstacleRef={obstacleRef} />
+  if (type === 'multiplier2' || type === 'multiplier3') {
+    const multiplier = type === 'multiplier3' ? 3 : 2
+    return <MultiplierPickup multiplier={multiplier} position={position} obstacleRef={obstacleRef} />
+  }
 
   if (type === 'pencils') {
     return (
@@ -821,6 +829,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
       if (i === 1) return { type: 'magnet', x: LANES[1], z: -24 }
       if (i === 4) return { type: 'rocket', x: LANES[2], z: -60 }
       if (i === 6) return { type: 'toy', x: LANES[0], z: -52 }
+      if (i === 8) return { type: 'multiplier2', x: LANES[2], z: -66 }
       const type = i % 2 ? OVERHEAD_TYPES[i % OVERHEAD_TYPES.length] : MOVING_TYPES[i % MOVING_TYPES.length]
       return { type, x: LANES[i % 3], z: -10 - i * 7 }
     }),
@@ -833,6 +842,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
       item.nearMissChecked = false
       item.nearMissCollided = false
       item.toyBroken = false
+      item.multiplierCollected = false
     })
     obstaclesRef.current = items
     return () => { obstaclesRef.current = [] }
@@ -846,6 +856,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
       item.z += delta * speedRef.current
       if (item.z > 5) {
         item.object?.userData.resetScatter?.()
+        item.object?.userData.resetMultiplier?.()
         let z = playerRef.current.position.z - 80
         while (
           items.some((other) => other !== item && Math.abs(other.z - z) < OBSTACLE_SPAWN_GAP) ||
@@ -856,6 +867,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
         item.nearMissChecked = false
         item.nearMissCollided = false
         item.toyBroken = false
+        item.multiplierCollected = false
         item.x = randomLane()
         item.vacuumDirection = Math.random() > 0.5 ? 1 : -1
         const type = chooseSpawnType()
@@ -870,6 +882,8 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
           item.type = 'rocket'
         } else if (type === 'toy') {
           item.type = 'toy'
+        } else if (type === 'multiplier') {
+          item.type = chooseMultiplierType()
         } else {
           item.type = Math.random() < 0.65
             ? MOVING_TYPES[Math.floor(Math.random() * MOVING_TYPES.length)]
@@ -882,6 +896,8 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
           ? GROUND_Y + MILK_MODEL_CENTER_OFFSET
           : item.type === 'magnet'
               ? GROUND_Y + 0.35
+              : item.type === 'multiplier2' || item.type === 'multiplier3'
+                ? GROUND_Y + 0.55
               : item.type === 'book'
                 ? GROUND_Y + BOOK_MODEL_CENTER_OFFSET
                 : GROUND_Y
@@ -915,7 +931,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
   ))
 }
 
-function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, magnetActive, onCollect, onRemove, onMove }) {
+function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, magnetActive, multiplier, onCollect, onRemove, onMove }) {
   const ref = useRef()
   const posX = useRef(coin.x)
   const posY = useRef(coin.y)
@@ -977,7 +993,7 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, magnetActive,
         if (dist < 1.15 || (Math.abs(dx) < 0.9 && Math.abs(dy) < 0.9 && Math.abs(dz) < 1.1)) {
           collected.current = true
           particleEmitter.emitCheeseBurst(posX.current, posY.current, posZ.current, coin.tier)
-          onCollect(coin.id, coin.value)
+          onCollect(coin.id, coin.value * multiplier)
           return
         }
       }
@@ -1022,7 +1038,7 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, magnetActive,
       ) {
         collected.current = true
         particleEmitter.emitCheeseBurst(posX.current, posY.current, posZ.current, coin.tier)
-        onCollect(coin.id, coin.value)
+        onCollect(coin.id, coin.value * multiplier)
         return
       }
     }
@@ -1095,7 +1111,7 @@ function makeCoinLine(obstacles, positions, nextId, coinsSpawned, playerRef, sta
   return result
 }
 
-function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, cheeseRequests, magnetActive, rocketActive, onCoin }) {
+function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, cheeseRequests, magnetActive, rocketActive, multiplier, onCoin }) {
   const [coins, setCoins] = useState([])
   const live = useRef([])
   const positions = positionsRef
@@ -1160,6 +1176,7 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, 
       speedRef={speedRef}
       obstaclesRef={obstaclesRef}
       magnetActive={magnetActive}
+      multiplier={multiplier}
       onCollect={(id, value) => { remove(id); onCoin(value) }}
       onRemove={remove}
       onMove={(id, x, z) => positions.current.set(id, { x, z })}
@@ -1275,7 +1292,7 @@ function Environment({ active, speedRef }) {
   )
 }
 
-function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseSpeed, maxSpeed, invincibleTime, magnetActive, rocketActive, highQuality, showFps, onFps, onScore, onCaught, onMilk, onMagnet, onRocket, onCoin }) {
+function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseSpeed, maxSpeed, multiplier = 1, invincibleTime, magnetActive, rocketActive, highQuality, showFps, onFps, onScore, onCaught, onMilk, onMagnet, onRocket, onMultiplier, onCoin }) {
   const player = useRef()
   const cat = useRef()
   const obstacles = useRef([])
@@ -1375,6 +1392,15 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         onRocket()
         continue
       }
+      if (obstacle.type === 'multiplier2' || obstacle.type === 'multiplier3') {
+        if (pickupHit && !obstacle.multiplierCollected) {
+          obstacle.multiplierCollected = true
+          obstacle.object?.userData.collectMultiplier?.()
+          obstacle.z = 2
+          onMultiplier(obstacle.type === 'multiplier3' ? 3 : 2)
+        }
+        continue
+      }
       if (obstacle.type === 'toy') {
         if (collision && !obstacle.toyBroken) {
           obstacle.toyBroken = true
@@ -1454,6 +1480,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         cheeseRequests={cheeseRequests}
         magnetActive={magnetActive}
         rocketActive={rocketActive}
+        multiplier={multiplier}
         onCoin={onCoin}
       />
     </>
@@ -1483,7 +1510,7 @@ function HighScore({ score, onBack }) {
   )
 }
 
-function UIOverlay({ score, coinCount, fps, showFps, soundEnabled, onToggleSound, graphicsQuality, onToggleGraphicsQuality, invincibleTime, magnetTime, rocketTime, isPaused, gameOver, onRestart, onMenu, onResume }) {
+function UIOverlay({ score, coinCount, fps, showFps, soundEnabled, onToggleSound, graphicsQuality, onToggleGraphicsQuality, multiplier, multiplierTime, invincibleTime, magnetTime, rocketTime, isPaused, gameOver, onRestart, onMenu, onResume }) {
   return (
     <div className="font-cartoon pointer-events-none absolute inset-0 select-none">
       <WindSpeedOverlay active={rocketTime > 0} />
@@ -1530,6 +1557,11 @@ function UIOverlay({ score, coinCount, fps, showFps, soundEnabled, onToggleSound
         {rocketTime > 0 && (
           <div className="bg-gradient-to-r from-orange-500 to-yellow-400 border-4 border-black text-white font-black text-2xl sm:text-3xl px-6 py-2 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-pulse flex items-center gap-2">
             <span>🚀</span> FLIGHT MODE: {rocketTime}s
+          </div>
+        )}
+        {multiplierTime > 0 && (
+          <div className={`border-4 border-black text-white font-black text-2xl sm:text-3xl px-6 py-2 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-pulse flex items-center gap-2 ${multiplier === 3 ? 'bg-gradient-to-r from-purple-700 to-fuchsia-500' : 'bg-gradient-to-r from-orange-600 to-amber-400'}`}>
+            <span>✦</span> {multiplier}X BOOST! {multiplierTime}s
           </div>
         )}
       </div>
@@ -1598,6 +1630,8 @@ export default function App() {
   const [invincibleTime, setInvincibleTime] = useState(0)
   const [magnetTime, setMagnetTime] = useState(0)
   const [rocketTime, setRocketTime] = useState(0)
+  const [multiplier, setMultiplier] = useState(1)
+  const [multiplierTime, setMultiplierTime] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
   const [isCaught, setIsCaught] = useState(false)
   const [theme, setTheme] = useState('day')
@@ -1653,6 +1687,8 @@ export default function App() {
     setInvincibleTime(0)
     setMagnetTime(0)
     setRocketTime(0)
+    setMultiplier(1)
+    setMultiplierTime(0)
     hits.current = 0
     setRun((value) => value + 1)
     setScreen('playing')
@@ -1702,6 +1738,20 @@ export default function App() {
     const timer = setInterval(() => setRocketTime((time) => Math.max(0, time - 1)), 1000)
     return () => clearInterval(timer)
   }, [rocketTime])
+
+  useEffect(() => {
+    if (multiplierTime <= 0) return undefined
+    const timer = setInterval(() => {
+      setMultiplierTime((time) => {
+        if (time <= 1) {
+          setMultiplier(1)
+          return 0
+        }
+        return time - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [multiplierTime])
 
   if (screen === 'menu') {
     return (
@@ -1764,6 +1814,7 @@ export default function App() {
           theme={theme}
           baseSpeed={settings.baseSpeed}
           maxSpeed={settings.maxSpeed}
+          multiplier={multiplier}
           invincibleTime={invincibleTime}
           magnetActive={magnetTime > 0}
           rocketActive={rocketTime > 0}
@@ -1778,6 +1829,11 @@ export default function App() {
           onMilk={() => setInvincibleTime(5)}
           onMagnet={() => setMagnetTime(8)}
           onRocket={() => setRocketTime(10)}
+          onMultiplier={(value) => {
+            setMultiplier(value)
+            setMultiplierTime(10)
+            playMultiplierSound()
+          }}
           onCaught={caught}
         />
         {graphicsQuality === 'high' && (
@@ -1798,6 +1854,8 @@ export default function App() {
         invincibleTime={invincibleTime}
         magnetTime={magnetTime}
         rocketTime={rocketTime}
+        multiplier={multiplier}
+        multiplierTime={multiplierTime}
         isPaused={isPaused}
         gameOver={screen === 'gameover'}
         onRestart={() => start(settings)}
