@@ -467,7 +467,8 @@ export function updateParticleSystem(dt, sparklesMesh, dustMesh, debrisMesh) {
       const currentScale = Math.max(0, p.targetScale * scaleMul)
 
       _position.set(p.x, p.y, p.z)
-      _quaternion.setFromEuler(p.rotX, p.rotY, p.rotZ, 'XYZ')
+      _euler.set(p.rotX, p.rotY, p.rotZ, 'XYZ')
+      _quaternion.setFromEuler(_euler)
       _scale.set(currentScale, currentScale, currentScale)
       _matrix.compose(_position, _quaternion, _scale)
 
@@ -519,7 +520,8 @@ export function updateParticleSystem(dt, sparklesMesh, dustMesh, debrisMesh) {
       const currentScale = Math.max(0, p.targetScale * expand * fade)
 
       _position.set(p.x, p.y, p.z)
-      _quaternion.setFromEuler(p.rotX, p.rotY, p.rotZ, 'XYZ')
+      _euler.set(p.rotX, p.rotY, p.rotZ, 'XYZ')
+      _quaternion.setFromEuler(_euler)
       _scale.set(currentScale, currentScale, currentScale)
       _matrix.compose(_position, _quaternion, _scale)
 
@@ -570,7 +572,8 @@ export function updateParticleSystem(dt, sparklesMesh, dustMesh, debrisMesh) {
       const currentScale = Math.max(0, p.targetScale * fade)
 
       _position.set(p.x, p.y, p.z)
-      _quaternion.setFromEuler(p.rotX, p.rotY, p.rotZ, 'XYZ')
+      _euler.set(p.rotX, p.rotY, p.rotZ, 'XYZ')
+      _quaternion.setFromEuler(_euler)
       _scale.set(currentScale, currentScale * 0.7, currentScale)
       _matrix.compose(_position, _quaternion, _scale)
 
