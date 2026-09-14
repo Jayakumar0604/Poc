@@ -109,6 +109,13 @@ const shrinkBox = (box, scale = COLLISION_BOX_SCALE) => {
   box.max.z -= z
   return box
 }
+const shrinkBoxY = (box, scale = 0.45) => {
+  const center = (box.min.y + box.max.y) / 2
+  const halfHeight = (box.max.y - box.min.y) * scale / 2
+  box.min.y = center - halfHeight
+  box.max.y = center + halfHeight
+  return box
+}
 const distanceBetweenBoxes = (first, second) => {
   const dx = Math.max(first.min.x - second.max.x, second.min.x - first.max.x, 0)
   const dy = Math.max(first.min.y - second.max.y, second.min.y - first.max.y, 0)
@@ -396,7 +403,7 @@ function MenuDecor() {
   )
 }
 
-function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActive = false, flightModeRef, highQuality }) {
+function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActive = false, flightModeRef, slidingRef, highQuality }) {
   const mouseRef = useRef()
   const tailRef = useRef()
   const velocity = useRef(0)
@@ -431,9 +438,9 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActiv
   const setDuck = useCallback((value) => {
     const player = mouseRef.current
     if (!player) return
-    player.scale.set(1, value ? 0.45 : 1, 1)
+    slidingRef.current = value
     player.position.y = value ? GROUND_Y + 0.1 : MOUSE_GROUND_Y
-  }, [])
+  }, [slidingRef])
 
   useEffect(() => {
     const move = (event) => {
@@ -490,6 +497,7 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActiv
 
     const flightMode = rocketActive || recoveringFromFlight.current
     flightModeRef.current = flightMode
+    slidingRef.current = !flightMode && grounded.current && ducking.current
 
     if (flightMode) {
       const targetY = rocketActive ? FLIGHT_Y : MOUSE_GROUND_Y
@@ -548,8 +556,10 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActiv
       }
     } else if (ducking.current) {
       // Sleek torpedo belly slide with low collision profile
-      player.scale.set(1.15, 0.45, 1.4)
-      player.position.y = GROUND_Y + 0.1 + Math.sin(t * 22) * 0.02
+      player.scale.x = MathUtils.lerp(player.scale.x, 1.15, Math.min(1, delta * 14))
+      player.scale.y = MathUtils.lerp(player.scale.y, 0.45, Math.min(1, delta * 14))
+      player.scale.z = MathUtils.lerp(player.scale.z, 1.4, Math.min(1, delta * 14))
+      player.position.y = GROUND_Y + 0.1
       player.rotation.z = bankZ + Math.sin(t * 22) * 0.04
       player.rotation.x = -0.05
       player.rotation.y = yawY
@@ -565,7 +575,9 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActiv
       const gallop = Math.sin(t * 18)
       player.position.y = MOUSE_GROUND_Y + Math.abs(gallop) * 0.06
       const bodySquash = (1 + gallop * 0.05) * landSquash.current
-      player.scale.set(1 - gallop * 0.03, bodySquash, 1 + gallop * 0.02)
+      player.scale.x = MathUtils.lerp(player.scale.x, 1 - gallop * 0.03, Math.min(1, delta * 14))
+      player.scale.y = MathUtils.lerp(player.scale.y, bodySquash, Math.min(1, delta * 14))
+      player.scale.z = MathUtils.lerp(player.scale.z, 1 + gallop * 0.02, Math.min(1, delta * 14))
       player.rotation.z = bankZ + gallop * 0.08
       player.rotation.x = 0.04 + Math.max(0, gallop) * 0.05
       player.rotation.y = yawY
@@ -1337,6 +1349,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
   const lastScore = useRef(0)
   const currentSpeed = useRef(baseSpeed)
   const playerStats = useRef({ hits: 0, lastHitTime: 0, invincibleUntil: 0 })
+  const slidingRef = useRef(false)
   const fpsElapsed = useRef(0)
   const fpsFrames = useRef(0)
   const coinPositions = useRef(new Map())
@@ -1373,6 +1386,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
     if (!player.current) return
     player.current.updateMatrixWorld(true)
     shrinkBox(playerBounds.setFromObject(player.current))
+    if (slidingRef.current) shrinkBoxY(playerBounds, 0.45)
     pickupBounds.copy(playerBounds).expandByScalar(0.28)
 
     for (const obstacle of obstacles.current) {
@@ -1495,6 +1509,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         magnetActive={magnetActive}
         rocketActive={rocketActive}
         flightModeRef={flightModeRef}
+        slidingRef={slidingRef}
         highQuality={highQuality}
       />
       <Cat catRef={cat} playerRef={player} playerStats={playerStats} active={active && !isPaused} isCaught={isCaught} highQuality={highQuality} />
