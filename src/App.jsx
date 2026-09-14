@@ -1489,7 +1489,8 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         continue
       }
       if (obstacle.type === 'butter') {
-        if (collision && !obstacle.butterTriggered) {
+        const butterCollision = collision || pickupHit
+        if (butterCollision && !obstacle.butterTriggered) {
           obstacle.butterTriggered = true
           obstacle.z = 2
           playButterSound()
