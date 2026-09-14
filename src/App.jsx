@@ -2018,7 +2018,7 @@ export default function App() {
           onButter={() => {
             setIsSlipping(true)
             clearTimeout(slipTimer.current)
-            slipTimer.current = setTimeout(() => setIsSlipping(false), 1500)
+            slipTimer.current = setTimeout(() => setIsSlipping(false), 4000)
           }}
           onMilk={() => setInvincibleTime(5)}
           onMagnet={() => setMagnetTime(8)}
