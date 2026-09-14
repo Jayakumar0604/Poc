@@ -5,6 +5,12 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 let cachedModel = null
 let loadPromise = null
 
+const CHEESE_APPEARANCE = {
+  normal: { color: '#f6c434', emissive: '#000000', emissiveIntensity: 0, metalness: 0.05, roughness: 0.45 },
+  blue: { color: '#168cff', emissive: '#0878ff', emissiveIntensity: 0.8, metalness: 0.12, roughness: 0.3 },
+  golden: { color: '#ffd12e', emissive: '#ff9700', emissiveIntensity: 0.35, metalness: 0.72, roughness: 0.24 },
+}
+
 /**
  * Preload and cache the 3D cheese model
  */
@@ -63,6 +69,7 @@ export default function CheeseModel({
   position = [0, 0, 0],
   rotation = [0, 0, 0],
   centerOrigin = false,
+  tier = 'normal',
   ...props
 }) {
   const [model, setModel] = useState(() => cachedModel)
@@ -75,8 +82,26 @@ export default function CheeseModel({
 
   const clonedScene = useMemo(() => {
     if (!model) return null
-    return model.clone(true)
-  }, [model])
+    const appearance = CHEESE_APPEARANCE[tier] || CHEESE_APPEARANCE.normal
+    const clone = model.clone(true)
+
+    clone.traverse((child) => {
+      if (!child.isMesh || !child.material) return
+      const materials = Array.isArray(child.material) ? child.material : [child.material]
+      const styledMaterials = materials.map((sourceMaterial) => {
+        const material = sourceMaterial.clone()
+        material.color.set(appearance.color)
+        material.emissive.set(appearance.emissive)
+        material.emissiveIntensity = appearance.emissiveIntensity
+        material.metalness = appearance.metalness
+        material.roughness = appearance.roughness
+        return material
+      })
+      child.material = Array.isArray(child.material) ? styledMaterials : styledMaterials[0]
+    })
+
+    return clone
+  }, [model, tier])
 
   if (!clonedScene) return null
 

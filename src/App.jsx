@@ -56,6 +56,17 @@ const NEAR_MISS_DISTANCE = 0.5
 const NEAR_MISS_DURATION = 0.3
 const NEAR_MISS_COOLDOWN = 1
 const INITIAL_CHEESE_REQUESTS = 4
+const CHEESE_TIERS = {
+  normal: { points: 5 },
+  blue: { points: 10 },
+  golden: { points: 20 },
+}
+const rollCheeseTier = () => {
+  const roll = Math.random()
+  if (roll < 0.8) return 'normal'
+  if (roll < 0.95) return 'blue'
+  return 'golden'
+}
 const chooseSpawnType = () => {
   const rand = Math.random()
   if (rand > 0.4) return 'obstacle'
@@ -955,7 +966,7 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, magnetActive,
 
         if (dist < 1.15 || (Math.abs(dx) < 0.9 && Math.abs(dy) < 0.9 && Math.abs(dz) < 1.1)) {
           collected.current = true
-          particleEmitter.emitCheeseBurst(posX.current, posY.current, posZ.current, coin.superCoin)
+          particleEmitter.emitCheeseBurst(posX.current, posY.current, posZ.current, coin.tier)
           onCollect(coin.id, coin.value)
           return
         }
@@ -1000,7 +1011,7 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, magnetActive,
         ))
       ) {
         collected.current = true
-        particleEmitter.emitCheeseBurst(posX.current, posY.current, posZ.current, coin.superCoin)
+        particleEmitter.emitCheeseBurst(posX.current, posY.current, posZ.current, coin.tier)
         onCollect(coin.id, coin.value)
         return
       }
@@ -1009,15 +1020,17 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, magnetActive,
     onMove(coin.id, posX.current, posZ.current)
     ref.current.position.set(posX.current, posY.current, posZ.current)
 
-    if (coin.superCoin) {
+    if (coin.tier === 'golden') {
       const pulse = 1 + Math.sin(t * 6) * 0.08
       ref.current.scale.set(pulse, pulse, pulse)
+    } else {
+      ref.current.scale.set(1, 1, 1)
     }
   })
 
   return (
     <group ref={ref} position={[coin.x, coin.y, coin.z]}>
-      <CheeseModel scale={coin.superCoin ? 3.8 : 2.8} centerOrigin />
+      <CheeseModel tier={coin.tier} scale={coin.tier === 'golden' ? 3.1 : 2.8} centerOrigin />
     </group>
   )
 }
@@ -1032,21 +1045,25 @@ function makeCoinLine(obstacles, positions, nextId, coinsSpawned, playerRef, sta
   if (!isFlightMode && !zValues.every((z) => coinFits(z, lane, obstacles, positions))) return []
 
   const result = []
+  const createCheese = (x, y, z, isAirborne) => {
+    const tier = rollCheeseTier()
+    coinsSpawned.current += 1
+    return {
+      id: nextId.current++,
+      x,
+      y,
+      z,
+      isAirborne,
+      tier,
+      value: CHEESE_TIERS[tier].points,
+    }
+  }
 
   if (isFlightMode) {
     // Dual-level spawning: Airborne cheese line AND Ground cheese line simultaneously
     // 1. Airborne cheese line
     zValues.forEach((z) => {
-      const superCoin = coinsSpawned.current++ % 11 === 10
-      result.push({
-        id: nextId.current++,
-        x: lane,
-        y: CHEESE_AIRBORNE_Y,
-        z,
-        isAirborne: true,
-        superCoin,
-        value: superCoin ? 25 : 10,
-      })
+      result.push(createCheese(lane, CHEESE_AIRBORNE_Y, z, true))
     })
 
     // 2. Ground cheese line
@@ -1056,30 +1073,12 @@ function makeCoinLine(obstacles, positions, nextId, coinsSpawned, playerRef, sta
     const selectedGroundLane = canUseOtherLane ? groundLane : lane
 
     zValues.forEach((z) => {
-      const superCoin = coinsSpawned.current++ % 11 === 10
-      result.push({
-        id: nextId.current++,
-        x: selectedGroundLane,
-        y: CHEESE_GROUND_Y,
-        z,
-        isAirborne: false,
-        superCoin,
-        value: superCoin ? 20 : 5,
-      })
+      result.push(createCheese(selectedGroundLane, CHEESE_GROUND_Y, z, false))
     })
   } else {
     // Ground level only
     zValues.forEach((z) => {
-      const superCoin = coinsSpawned.current++ % 11 === 10
-      result.push({
-        id: nextId.current++,
-        x: lane,
-        y: CHEESE_GROUND_Y,
-        z,
-        isAirborne: false,
-        superCoin,
-        value: superCoin ? 20 : 5,
-      })
+      result.push(createCheese(lane, CHEESE_GROUND_Y, z, false))
     })
   }
 

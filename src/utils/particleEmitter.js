@@ -131,28 +131,53 @@ export const particleEmitter = {
     particlesEnabled = enabled
   },
 
-  emitCheeseBurst(x, y, z, isSuper = false) {
+  emitCheeseBurst(x, y, z, tier = 'normal') {
     if (!particlesEnabled) return
-    const count = isSuper ? 32 : 20
-    const palette = isSuper
-      ? ['#ffd700', '#ffaa00', '#ff6080', '#00f0ff', '#ffffff']
-      : ['#ffd700', '#ffb703', '#ffa200', '#fff4b8', '#ffffff']
+    const resolvedTier = tier === true ? 'golden' : tier
+    const config = {
+      normal: {
+        count: 20,
+        palette: ['#ffd84a', '#ffb703', '#ffa200', '#fff4b8', '#ffffff'],
+        speed: 2.5,
+        spread: 3,
+        size: 0.08,
+        dust: '#ffe169',
+      },
+      blue: {
+        count: 28,
+        palette: ['#38bdf8', '#168cff', '#0ea5e9', '#b9efff', '#ffffff'],
+        speed: 3.1,
+        spread: 4.2,
+        size: 0.09,
+        dust: '#38bdf8',
+      },
+      golden: {
+        count: 36,
+        palette: ['#fff2a3', '#ffd700', '#ffb000', '#fff8d6', '#ffffff'],
+        speed: 3.8,
+        spread: 5.2,
+        size: 0.12,
+        dust: '#ffd22e',
+      },
+    }[resolvedTier] || null
 
-    for (let i = 0; i < count; i++) {
+    if (!config) return
+
+    for (let i = 0; i < config.count; i++) {
       const theta = Math.random() * Math.PI * 2
       const phi = (Math.random() - 0.3) * Math.PI
-      const speed = (isSuper ? 3.5 : 2.5) + Math.random() * (isSuper ? 4.5 : 3.0)
+      const speed = config.speed + Math.random() * config.spread
       const vx = Math.cos(theta) * Math.cos(phi) * speed
       const vy = (Math.sin(phi) + 0.6) * speed * 0.8
       const vz = Math.sin(theta) * Math.cos(phi) * speed
-      const color = palette[Math.floor(Math.random() * palette.length)]
-      const size = (isSuper ? 0.12 : 0.08) + Math.random() * 0.06
+      const color = config.palette[Math.floor(Math.random() * config.palette.length)]
+      const size = config.size + Math.random() * (resolvedTier === 'golden' ? 0.08 : 0.06)
       const life = 0.55 + Math.random() * 0.4
-      spawnSparkle(x, y, z, vx, vy, vz, color, size, life, 7.5, 0.94)
+      spawnSparkle(x, y, z, vx, vy, vz, color, size, life, resolvedTier === 'blue' ? 6.5 : 7.5, 0.94)
     }
 
-    // Soft golden glow dust in the center
-    for (let j = 0; j < (isSuper ? 6 : 4); j++) {
+    const dustCount = resolvedTier === 'golden' ? 8 : resolvedTier === 'blue' ? 5 : 4
+    for (let j = 0; j < dustCount; j++) {
       spawnDust(
         x,
         y,
@@ -160,8 +185,8 @@ export const particleEmitter = {
         (Math.random() - 0.5) * 0.8,
         0.4 + Math.random() * 0.6,
         (Math.random() - 0.5) * 0.8,
-        '#ffe169',
-        isSuper ? 0.22 : 0.14,
+        config.dust,
+        resolvedTier === 'golden' ? 0.22 : resolvedTier === 'blue' ? 0.16 : 0.14,
         0.45,
         -0.2,
         0.9,
