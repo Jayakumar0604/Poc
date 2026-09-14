@@ -38,6 +38,7 @@ const soundPools = {
   swoosh: createSoundPool(swooshSoundUrl, 0.48, 2),
   toyClatter: createSoundPool(mouseTrapSoundUrl, 0.48, 2),
   multiplier: createSoundPool(swooshSoundUrl, 0.62, 2),
+  sugarRush: createSoundPool(rocketTakeSoundUrl, 0.82, 2),
 }
 
 let unlocked = false
@@ -109,6 +110,10 @@ export function playToyClatterSound() {
 
 export function playMultiplierSound() {
   playPooledSound('multiplier')
+}
+
+export function playSugarRushSound() {
+  playPooledSound('sugarRush')
 }
 
 export function playMilkSound() {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { EffectComposer, SSAO } from '@react-three/postprocessing'
-import { Box3, CanvasTexture, MathUtils, RepeatWrapping } from 'three'
+import { ChromaticAberration, EffectComposer, SSAO } from '@react-three/postprocessing'
+import { Box3, CanvasTexture, MathUtils, RepeatWrapping, Vector2 } from 'three'
 import MainMenu from './components/MainMenu'
 import ThreeMenuCanvas from './components/ThreeMenuScene'
 import GraphicsQualityManager from './components/GraphicsQualityManager'
@@ -29,6 +29,7 @@ import {
   playSwooshSound,
   playToyClatterSound,
   playMultiplierSound,
+  playSugarRushSound,
   readSoundPreference,
   setSoundMuted,
   startAudio,
@@ -59,6 +60,12 @@ const OBSTACLE_SPAWN_GAP = 5.5
 const NEAR_MISS_DISTANCE = 0.5
 const NEAR_MISS_DURATION = 0.3
 const NEAR_MISS_COOLDOWN = 1
+const COMBO_MAX = 100
+const COMBO_GAIN = 10
+const COMBO_DECAY_DELAY = 1.5
+const COMBO_DECAY_PER_TICK = 8
+const SUGAR_RUSH_DURATION = 5
+const SUGAR_RUSH_CHROMATIC_OFFSET = new Vector2(0.0035, 0.0035)
 const INITIAL_CHEESE_REQUESTS = 4
 const CHEESE_TIERS = {
   normal: { points: 5 },
@@ -106,9 +113,9 @@ const coinFits = (z, lane, obstacles, positions) => (
   ))
 )
 
-function Camera({ isCaught, cinematic, flightActive = false, nearMissRef }) {
+function Camera({ isCaught, cinematic, flightActive = false, sugarRushActive = false, nearMissRef }) {
   const { camera } = useThree()
-  const targetFov = flightActive ? 66 : 55
+  const targetFov = sugarRushActive ? 75 : flightActive ? 66 : 55
 
   useFrame((_, delta) => {
     const targetZ = isCaught ? 3.5 : cinematic ? 5.5 : flightActive ? 8.2 : 7
@@ -931,7 +938,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
   ))
 }
 
-function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, magnetActive, multiplier, onCollect, onRemove, onMove }) {
+function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, magnetActive, sugarRushActive, multiplier, onCollect, onRemove, onMove }) {
   const ref = useRef()
   const posX = useRef(coin.x)
   const posY = useRef(coin.y)
@@ -963,18 +970,28 @@ function Cheese({ coin, active, playerRef, speedRef, obstaclesRef, magnetActive,
     const canCollect = isPlayerAirborne ? Boolean(coin.isAirborne) : !coin.isAirborne
 
     let isPulled = false
+    const vacuumActive = magnetActive || sugarRushActive
+    const canUseVacuum = sugarRushActive || canCollect
 
-    if (magnetActive && canCollect && p && posZ.current < p.z + 2) {
-      const targetY = p.y + 0.2
+    if (
+      vacuumActive &&
+      canUseVacuum &&
+      p &&
+      (sugarRushActive || posZ.current < p.z + 2)
+    ) {
+      const targetY = sugarRushActive ? p.y : p.y + 0.2
       const dx = p.x - posX.current
       const dy = targetY - posY.current
       const dz = p.z - posZ.current
       const dist = Math.hypot(dx, dy, dz)
 
-      if (dist < 45) {
+      const pullDistance = sugarRushActive ? 15 : 45
+      if (dist < pullDistance) {
         isPulled = true
-        // Accelerate attraction speed as cheese gets closer
-        const pullSpeed = Math.min(42, Math.max(18, 22 + (30 - Math.min(30, dist)) * 1.1))
+        // Sugar Rush uses a stronger, direct vacuum into the player's bounds.
+        const pullSpeed = sugarRushActive
+          ? Math.min(58, Math.max(30, 34 + (15 - Math.min(15, dist)) * 1.8))
+          : Math.min(42, Math.max(18, 22 + (30 - Math.min(30, dist)) * 1.1))
         const step = pullSpeed * delta
         const invDist = dist > 0.001 ? 1 / dist : 1
 
@@ -1111,7 +1128,7 @@ function makeCoinLine(obstacles, positions, nextId, coinsSpawned, playerRef, sta
   return result
 }
 
-function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, cheeseRequests, magnetActive, rocketActive, multiplier, onCoin }) {
+function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, cheeseRequests, magnetActive, sugarRushActive, rocketActive, multiplier, onCoin }) {
   const [coins, setCoins] = useState([])
   const live = useRef([])
   const positions = positionsRef
@@ -1176,6 +1193,7 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, 
       speedRef={speedRef}
       obstaclesRef={obstaclesRef}
       magnetActive={magnetActive}
+      sugarRushActive={sugarRushActive}
       multiplier={multiplier}
       onCollect={(id, value) => { remove(id); onCoin(value) }}
       onRemove={remove}
@@ -1292,7 +1310,7 @@ function Environment({ active, speedRef }) {
   )
 }
 
-function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseSpeed, maxSpeed, multiplier = 1, invincibleTime, magnetActive, rocketActive, highQuality, showFps, onFps, onScore, onCaught, onMilk, onMagnet, onRocket, onMultiplier, onCoin }) {
+function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseSpeed, maxSpeed, multiplier = 1, invincibleTime, magnetActive, sugarRushActive = false, rocketActive, highQuality, showFps, onFps, onScore, onCaught, onMilk, onMagnet, onRocket, onMultiplier, onCoin }) {
   const player = useRef()
   const cat = useRef()
   const obstacles = useRef([])
@@ -1441,7 +1459,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
 
   return (
     <>
-      <Camera isCaught={isCaught} cinematic={cinematic} flightActive={rocketActive} nearMissRef={nearMissRef} />
+      <Camera isCaught={isCaught} cinematic={cinematic} flightActive={rocketActive} sugarRushActive={sugarRushActive} nearMissRef={nearMissRef} />
       <GraphicsQualityManager quality={highQuality ? 'high' : 'low'} />
       <Lighting theme={theme} highQuality={highQuality} />
       <SkyEnvironment active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
@@ -1479,6 +1497,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         positionsRef={coinPositions}
         cheeseRequests={cheeseRequests}
         magnetActive={magnetActive}
+        sugarRushActive={sugarRushActive}
         rocketActive={rocketActive}
         multiplier={multiplier}
         onCoin={onCoin}
@@ -1510,7 +1529,7 @@ function HighScore({ score, onBack }) {
   )
 }
 
-function UIOverlay({ score, coinCount, fps, showFps, soundEnabled, onToggleSound, graphicsQuality, onToggleGraphicsQuality, multiplier, multiplierTime, invincibleTime, magnetTime, rocketTime, isPaused, gameOver, onRestart, onMenu, onResume }) {
+function UIOverlay({ score, coinCount, fps, showFps, soundEnabled, onToggleSound, graphicsQuality, onToggleGraphicsQuality, multiplier, multiplierTime, comboGauge, sugarRushTime, invincibleTime, magnetTime, rocketTime, isPaused, gameOver, onRestart, onMenu, onResume }) {
   return (
     <div className="font-cartoon pointer-events-none absolute inset-0 select-none">
       <WindSpeedOverlay active={rocketTime > 0} />
@@ -1520,6 +1539,18 @@ function UIOverlay({ score, coinCount, fps, showFps, soundEnabled, onToggleSound
       <div className="absolute right-5 top-5 flex gap-4 rounded-xl border border-[#fed23a]/30 bg-[#321c13]/85 px-4 py-2 text-sm text-white shadow-lg backdrop-blur-sm">
         <span className="font-black text-[#ffd369]">SCORE {score.toString().padStart(4, '0')}</span>
         <span className="font-black text-[#ffbd38]">🧀 {coinCount}</span>
+      </div>
+      <div className="absolute right-5 top-[4.5rem] z-20 w-52 rounded-xl border border-[#fed23a]/30 bg-[#321c13]/90 p-2.5 shadow-lg backdrop-blur-sm sm:w-64">
+        <div className="mb-1 flex items-center justify-between text-[0.7rem] font-black uppercase tracking-wider text-[#ffe7a3]">
+          <span>🍬 Combo Gauge</span>
+          <span>{comboGauge}/100</span>
+        </div>
+        <div className="h-3 overflow-hidden rounded-full border border-black/70 bg-black/40">
+          <div
+            className={`h-full rounded-full transition-[width] duration-100 ${sugarRushTime > 0 ? 'bg-gradient-to-r from-pink-400 via-yellow-300 to-white animate-pulse' : 'bg-gradient-to-r from-amber-500 to-pink-500'}`}
+            style={{ width: `${comboGauge}%` }}
+          />
+        </div>
       </div>
       <div className="pointer-events-auto absolute left-5 top-[4.5rem] z-20 flex max-w-[calc(100vw-2.5rem)] flex-row items-center gap-3">
         {showFps && <div className="whitespace-nowrap rounded-xl border border-[#86efac]/30 bg-[#321c13]/85 px-3 py-1.5 text-xs font-black text-[#86efac] shadow-lg backdrop-blur-sm">{fps} FPS</div>}
@@ -1562,6 +1593,11 @@ function UIOverlay({ score, coinCount, fps, showFps, soundEnabled, onToggleSound
         {multiplierTime > 0 && (
           <div className={`border-4 border-black text-white font-black text-2xl sm:text-3xl px-6 py-2 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-pulse flex items-center gap-2 ${multiplier === 3 ? 'bg-gradient-to-r from-purple-700 to-fuchsia-500' : 'bg-gradient-to-r from-orange-600 to-amber-400'}`}>
             <span>✦</span> {multiplier}X BOOST! {multiplierTime}s
+          </div>
+        )}
+        {sugarRushTime > 0 && (
+          <div className="border-4 border-black bg-gradient-to-r from-pink-600 via-orange-500 to-yellow-300 text-white font-black text-2xl sm:text-3xl px-6 py-2 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-pulse flex items-center gap-2">
+            <span>🍭</span> SUGAR RUSH! {sugarRushTime}s
           </div>
         )}
       </div>
@@ -1632,6 +1668,8 @@ export default function App() {
   const [rocketTime, setRocketTime] = useState(0)
   const [multiplier, setMultiplier] = useState(1)
   const [multiplierTime, setMultiplierTime] = useState(0)
+  const [comboGauge, setComboGauge] = useState(0)
+  const [sugarRushTime, setSugarRushTime] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
   const [isCaught, setIsCaught] = useState(false)
   const [theme, setTheme] = useState('day')
@@ -1640,6 +1678,10 @@ export default function App() {
   const [run, setRun] = useState(0)
   const [settings, setSettings] = useState(DIFFICULTIES.Easy)
   const hits = useRef(0)
+  const comboGaugeRef = useRef(0)
+  const comboLastCheeseAtRef = useRef(0)
+  const sugarRushRef = useRef(false)
+  const sugarRushEndsAtRef = useRef(0)
 
   useEffect(() => {
     const togglePause = (event) => {
@@ -1675,6 +1717,26 @@ export default function App() {
     })
   }
 
+  const handleCheeseCollected = useCallback((value) => {
+    playCheeseCollectSound()
+    setCoinCount((total) => total + value)
+
+    const now = performance.now()
+    comboLastCheeseAtRef.current = now
+    if (sugarRushRef.current) return
+
+    const nextGauge = Math.min(COMBO_MAX, comboGaugeRef.current + COMBO_GAIN)
+    comboGaugeRef.current = nextGauge
+    setComboGauge(nextGauge)
+
+    if (nextGauge >= COMBO_MAX) {
+      sugarRushRef.current = true
+      sugarRushEndsAtRef.current = now + SUGAR_RUSH_DURATION * 1000
+      setSugarRushTime(SUGAR_RUSH_DURATION)
+      playSugarRushSound()
+    }
+  }, [])
+
   const start = (nextSettings = settings) => {
     startAudio()
     clearTimeout(catchTimer.current)
@@ -1689,6 +1751,12 @@ export default function App() {
     setRocketTime(0)
     setMultiplier(1)
     setMultiplierTime(0)
+    comboGaugeRef.current = 0
+    comboLastCheeseAtRef.current = performance.now()
+    sugarRushRef.current = false
+    sugarRushEndsAtRef.current = 0
+    setComboGauge(0)
+    setSugarRushTime(0)
     hits.current = 0
     setRun((value) => value + 1)
     setScreen('playing')
@@ -1738,6 +1806,37 @@ export default function App() {
     const timer = setInterval(() => setRocketTime((time) => Math.max(0, time - 1)), 1000)
     return () => clearInterval(timer)
   }, [rocketTime])
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = performance.now()
+
+      if (sugarRushRef.current) {
+        const remaining = sugarRushEndsAtRef.current - now
+        if (remaining <= 0) {
+          sugarRushRef.current = false
+          sugarRushEndsAtRef.current = 0
+          comboGaugeRef.current = 0
+          setComboGauge(0)
+          setSugarRushTime(0)
+        } else {
+          setSugarRushTime(Math.ceil(remaining / 1000))
+        }
+        return
+      }
+
+      if (
+        comboGaugeRef.current > 0 &&
+        now - comboLastCheeseAtRef.current >= COMBO_DECAY_DELAY * 1000
+      ) {
+        const nextGauge = Math.max(0, comboGaugeRef.current - COMBO_DECAY_PER_TICK)
+        comboGaugeRef.current = nextGauge
+        setComboGauge(nextGauge)
+      }
+    }, 100)
+
+    return () => clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     if (multiplierTime <= 0) return undefined
@@ -1817,15 +1916,13 @@ export default function App() {
           multiplier={multiplier}
           invincibleTime={invincibleTime}
           magnetActive={magnetTime > 0}
+          sugarRushActive={sugarRushTime > 0}
           rocketActive={rocketTime > 0}
           highQuality={graphicsQuality === 'high'}
           showFps={showFps}
           onFps={setFps}
           onScore={setScore}
-          onCoin={(value) => {
-            playCheeseCollectSound()
-            setCoinCount((total) => total + value)
-          }}
+          onCoin={handleCheeseCollected}
           onMilk={() => setInvincibleTime(5)}
           onMagnet={() => setMagnetTime(8)}
           onRocket={() => setRocketTime(10)}
@@ -1836,9 +1933,18 @@ export default function App() {
           }}
           onCaught={caught}
         />
-        {graphicsQuality === 'high' && (
-          <EffectComposer multisampling={0} enableNormalPass>
-            <SSAO radius={0.25} intensity={1.2} luminanceInfluence={0.7} samples={16} />
+        {(graphicsQuality === 'high' || sugarRushTime > 0) && (
+          <EffectComposer multisampling={0} enableNormalPass={graphicsQuality === 'high'}>
+            {graphicsQuality === 'high' && (
+              <SSAO radius={0.25} intensity={1.2} luminanceInfluence={0.7} samples={16} />
+            )}
+            {sugarRushTime > 0 && (
+              <ChromaticAberration
+                offset={SUGAR_RUSH_CHROMATIC_OFFSET}
+                radialModulation
+                modulationOffset={0.35}
+              />
+            )}
           </EffectComposer>
         )}
       </Canvas>
@@ -1856,6 +1962,8 @@ export default function App() {
         rocketTime={rocketTime}
         multiplier={multiplier}
         multiplierTime={multiplierTime}
+        comboGauge={comboGauge}
+        sugarRushTime={sugarRushTime}
         isPaused={isPaused}
         gameOver={screen === 'gameover'}
         onRestart={() => start(settings)}

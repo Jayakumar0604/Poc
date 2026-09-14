@@ -1,9 +1,10 @@
-import { Color, Matrix4, Quaternion, Vector3 } from 'three'
+import { Color, Euler, Matrix4, Quaternion, Vector3 } from 'three'
 
 // Pre-allocated reusable math objects to avoid garbage collection
 const _matrix = new Matrix4()
 const _position = new Vector3()
 const _quaternion = new Quaternion()
+const _euler = new Euler()
 const _scale = new Vector3()
 
 export const SPARKLE_POOL_SIZE = 180
