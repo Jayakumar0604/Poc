@@ -1,5 +1,6 @@
 import backgroundMusicUrl from '../assets/music/background-music.mp3'
 import butterSoundUrl from '../assets/music/butter.wav'
+import slideSoundUrl from '../assets/music/slide.mp3'
 import gameOverSoundUrl from '../assets/music/game-over.mp3'
 import firstHitSoundUrl from '../assets/music/first-hit.mp3'
 import jumpSoundUrl from '../assets/music/jump.mp3'
@@ -28,6 +29,7 @@ function createSoundPool(url, volume, poolSize = 1) {
 
 const soundPools = {
   butter: createSoundPool(butterSoundUrl, 0.55, SFX_POOL_SIZE),
+  slide: createSoundPool(slideSoundUrl, 0.65, SFX_POOL_SIZE),
   firstHit: createSoundPool(firstHitSoundUrl, 0.7),
   gameOver: createSoundPool(gameOverSoundUrl, 0.8),
   jump: createSoundPool(jumpSoundUrl, 0.55, SFX_POOL_SIZE),
@@ -97,7 +99,7 @@ export function playCheeseCollectSound() {
 }
 
 export function playButterSound() {
-  playPooledSound('butter')
+  playPooledSound('slide')
 }
 
 export function playRocketTakeSound() {
