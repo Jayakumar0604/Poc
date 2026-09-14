@@ -27,6 +27,7 @@ import {
   playMouseTrapSound,
   playRocketTakeSound,
   playSwooshSound,
+  playToyClatterSound,
   readSoundPreference,
   setSoundMuted,
   startAudio,
@@ -34,6 +35,7 @@ import {
 import AtmosphericParticles from './components/AtmosphericParticles'
 import { RocketThrust, FlightSpeedStreaks, MagnetFluxParticles, CatChaseAura } from './components/SpecialEffects'
 import WindSpeedOverlay from './components/WindSpeedOverlay'
+import BreakableToyObstacle from './components/BreakableToyObstacle'
 
 const KEY = 'endless-runner-high-score'
 const FPS_KEY = 'show-fps-counter'
@@ -70,6 +72,7 @@ const rollCheeseTier = () => {
 const chooseSpawnType = () => {
   const rand = Math.random()
   if (rand > 0.4) return 'obstacle'
+  if (rand > 0.36) return 'toy'
   if (rand > 0.14) return 'cheese'
   if (rand > 0.07) return 'milk'
   if (rand > 0.03) return 'magnet'
@@ -89,7 +92,7 @@ const distanceBetweenBoxes = (first, second) => {
   const dz = Math.max(first.min.z - second.max.z, second.min.z - first.max.z, 0)
   return Math.hypot(dx, dy, dz)
 }
-const canTriggerNearMiss = (type) => !['empty', 'milkBowl', 'magnet', 'rocket'].includes(type)
+const canTriggerNearMiss = (type) => !['empty', 'milkBowl', 'magnet', 'rocket', 'toy'].includes(type)
 const coinFits = (z, lane, obstacles, positions) => (
   obstacles.every((obstacle) => (
     Math.abs(obstacle.x - lane) >= 0.9 || Math.abs(obstacle.z - z) >= MIN_OBJECT_GAP
@@ -767,6 +770,7 @@ function Obstacle({ type, position, obstacleRef, onRocket, highQuality }) {
   if (type === 'vacuum') return <Vacuum position={position} obstacleRef={obstacleRef} />
   if (type === 'rocket') return <RocketPickup position={position} obstacleRef={obstacleRef} onCollect={onRocket} highQuality={highQuality} />
   if (type === 'magnet') return <MagnetPickup position={position} obstacleRef={obstacleRef} />
+  if (type === 'toy') return <BreakableToyObstacle position={position} obstacleRef={obstacleRef} />
 
   if (type === 'pencils') {
     return (
@@ -816,6 +820,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
     () => Array.from({ length: 9 }, (_, i) => {
       if (i === 1) return { type: 'magnet', x: LANES[1], z: -24 }
       if (i === 4) return { type: 'rocket', x: LANES[2], z: -60 }
+      if (i === 6) return { type: 'toy', x: LANES[0], z: -52 }
       const type = i % 2 ? OVERHEAD_TYPES[i % OVERHEAD_TYPES.length] : MOVING_TYPES[i % MOVING_TYPES.length]
       return { type, x: LANES[i % 3], z: -10 - i * 7 }
     }),
@@ -827,6 +832,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
       item.nearMissDistance = Infinity
       item.nearMissChecked = false
       item.nearMissCollided = false
+      item.toyBroken = false
     })
     obstaclesRef.current = items
     return () => { obstaclesRef.current = [] }
@@ -839,6 +845,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
       const mesh = refs.current[index]
       item.z += delta * speedRef.current
       if (item.z > 5) {
+        item.object?.userData.resetScatter?.()
         let z = playerRef.current.position.z - 80
         while (
           items.some((other) => other !== item && Math.abs(other.z - z) < OBSTACLE_SPAWN_GAP) ||
@@ -848,6 +855,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
         item.nearMissDistance = Infinity
         item.nearMissChecked = false
         item.nearMissCollided = false
+        item.toyBroken = false
         item.x = randomLane()
         item.vacuumDirection = Math.random() > 0.5 ? 1 : -1
         const type = chooseSpawnType()
@@ -860,6 +868,8 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
           item.type = 'magnet'
         } else if (type === 'rocket') {
           item.type = 'rocket'
+        } else if (type === 'toy') {
+          item.type = 'toy'
         } else {
           item.type = Math.random() < 0.65
             ? MOVING_TYPES[Math.floor(Math.random() * MOVING_TYPES.length)]
@@ -1363,6 +1373,14 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         particleEmitter.emitPowerupPickup(player.current.position.x, player.current.position.y + 0.3, player.current.position.z, 'rocket')
         obstacle.z = 2
         onRocket()
+        continue
+      }
+      if (obstacle.type === 'toy') {
+        if (collision && !obstacle.toyBroken) {
+          obstacle.toyBroken = true
+          obstacle.object?.userData.triggerScatter?.()
+          playToyClatterSound()
+        }
         continue
       }
       if (flightModeRef.current || rocketActive) continue

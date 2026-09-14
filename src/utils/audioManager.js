@@ -36,6 +36,7 @@ const soundPools = {
   mouseTrap: createSoundPool(mouseTrapSoundUrl, 0.7),
   rocketTake: createSoundPool(rocketTakeSoundUrl, 0.7),
   swoosh: createSoundPool(swooshSoundUrl, 0.48, 2),
+  toyClatter: createSoundPool(mouseTrapSoundUrl, 0.48, 2),
 }
 
 let unlocked = false
@@ -99,6 +100,10 @@ export function playRocketTakeSound() {
 
 export function playSwooshSound() {
   playPooledSound('swoosh')
+}
+
+export function playToyClatterSound() {
+  playPooledSound('toyClatter')
 }
 
 export function playMilkSound() {
