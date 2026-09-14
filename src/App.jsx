@@ -26,6 +26,7 @@ import {
   playMilkSound,
   playMouseTrapSound,
   playRocketTakeSound,
+  playSwooshSound,
   readSoundPreference,
   setSoundMuted,
   startAudio,
@@ -51,6 +52,9 @@ const OVERHEAD_TYPES = ['table', 'pencils']
 const MOVING_TYPES = ['mousetrap', 'yarn', 'vacuum', 'mousetrap', 'yarn', 'book']
 const MIN_OBJECT_GAP = 8
 const OBSTACLE_SPAWN_GAP = 5.5
+const NEAR_MISS_DISTANCE = 0.5
+const NEAR_MISS_DURATION = 0.3
+const NEAR_MISS_COOLDOWN = 1
 const INITIAL_CHEESE_REQUESTS = 4
 const chooseSpawnType = () => {
   const rand = Math.random()
@@ -68,6 +72,13 @@ const DIFFICULTIES = {
 const readBest = () => Number(localStorage.getItem(KEY)) || 0
 const readFpsPreference = () => localStorage.getItem(FPS_KEY) !== 'false'
 const readGraphicsQuality = () => localStorage.getItem(GRAPHICS_QUALITY_KEY) === 'low' ? 'low' : 'high'
+const distanceBetweenBoxes = (first, second) => {
+  const dx = Math.max(first.min.x - second.max.x, second.min.x - first.max.x, 0)
+  const dy = Math.max(first.min.y - second.max.y, second.min.y - first.max.y, 0)
+  const dz = Math.max(first.min.z - second.max.z, second.min.z - first.max.z, 0)
+  return Math.hypot(dx, dy, dz)
+}
+const canTriggerNearMiss = (type) => !['empty', 'milkBowl', 'magnet', 'rocket'].includes(type)
 const coinFits = (z, lane, obstacles, positions) => (
   obstacles.every((obstacle) => (
     Math.abs(obstacle.x - lane) >= 0.9 || Math.abs(obstacle.z - z) >= MIN_OBJECT_GAP
@@ -77,7 +88,7 @@ const coinFits = (z, lane, obstacles, positions) => (
   ))
 )
 
-function Camera({ isCaught, cinematic, flightActive = false }) {
+function Camera({ isCaught, cinematic, flightActive = false, nearMissRef }) {
   const { camera } = useThree()
   const targetFov = flightActive ? 66 : 55
 
@@ -86,11 +97,43 @@ function Camera({ isCaught, cinematic, flightActive = false }) {
     const targetY = isCaught ? 2.8 : cinematic ? 2.6 : flightActive ? 4.8 : 3.5
     const targetLookAtY = isCaught ? 0.2 : flightActive ? 1.4 : 0.1
 
+    // First settle the camera back to its normal rig position. Applying the
+    // jolt after this interpolation keeps the shake additive and prevents
+    // offsets from accumulating frame after frame.
     camera.position.lerp(
-      { x: camera.position.x, y: targetY, z: targetZ },
+      { x: 0, y: targetY, z: targetZ },
       Math.min(1, delta * (flightActive ? 4 : 5)),
     )
-    camera.lookAt(0, targetLookAtY, cinematic ? -10 : -18)
+
+    const jolt = nearMissRef?.current
+    let lookAtX = 0
+    let lookAtY = targetLookAtY
+    let lookAtZ = cinematic ? -10 : -18
+
+    if (jolt) {
+      // oxlint-disable-next-line react/immutability
+      jolt.cooldown = Math.max(0, jolt.cooldown - delta)
+      if (jolt.remaining > 0) {
+        jolt.remaining = Math.max(0, jolt.remaining - delta)
+        const elapsed = jolt.duration - jolt.remaining
+        const envelope = jolt.remaining / jolt.duration
+        const frequency = 70
+        const phase = jolt.seed
+        const shakeX = (Math.sin(elapsed * frequency + phase) + 0.45 * Math.cos(elapsed * 31 + phase * 1.7)) * 0.045 * envelope
+        const shakeY = (Math.cos(elapsed * frequency * 0.83 + phase) + 0.35 * Math.sin(elapsed * 43)) * 0.032 * envelope
+        const shakeZ = Math.sin(elapsed * 53 + phase * 0.7) * 0.025 * envelope
+
+        // oxlint-disable-next-line react/immutability
+        camera.position.x += shakeX
+        camera.position.y += shakeY
+        camera.position.z += shakeZ
+        lookAtX = shakeX * 0.35
+        lookAtY += shakeY * 0.35
+        lookAtZ += shakeZ * 0.25
+      }
+    }
+
+    camera.lookAt(lookAtX, lookAtY, lookAtZ)
 
     if (Math.abs(camera.fov - targetFov) > 0.1) {
       // oxlint-disable-next-line react/immutability
@@ -769,6 +812,11 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
   )
   const refs = useRef([])
   useEffect(() => {
+    items.forEach((item) => {
+      item.nearMissDistance = Infinity
+      item.nearMissChecked = false
+      item.nearMissCollided = false
+    })
     obstaclesRef.current = items
     return () => { obstaclesRef.current = [] }
   }, [items, obstaclesRef])
@@ -786,6 +834,9 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
           [...coinPositions.current.values()].some((coin) => Math.abs(coin.z - z) < OBSTACLE_SPAWN_GAP)
         ) z -= OBSTACLE_SPAWN_GAP
         item.z = z
+        item.nearMissDistance = Infinity
+        item.nearMissChecked = false
+        item.nearMissCollided = false
         item.x = randomLane()
         item.vacuumDirection = Math.random() > 0.5 ? 1 : -1
         const type = chooseSpawnType()
@@ -1231,6 +1282,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
   const playerBounds = useMemo(() => new Box3(), [])
   const pickupBounds = useMemo(() => new Box3(), [])
   const obstacleBounds = useMemo(() => new Box3(), [])
+  const nearMissRef = useRef({ remaining: 0, duration: NEAR_MISS_DURATION, cooldown: 0, seed: 0 })
 
   useEffect(() => {
     particleEmitter.setEnabled(highQuality)
@@ -1263,9 +1315,13 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
     for (const obstacle of obstacles.current) {
       let pickupHit = false
       let collision = false
+      let nearMissDistance = Infinity
+      let passedPlayer = false
       if (obstacle.object) {
         obstacle.object.updateMatrixWorld(true)
         obstacleBounds.setFromObject(obstacle.object)
+        nearMissDistance = distanceBetweenBoxes(playerBounds, obstacleBounds)
+        passedPlayer = obstacleBounds.min.z > playerBounds.max.z
         // Sweep the current obstacle box backward by this frame's travel to
         // prevent fast objects from tunneling through the player.
         // oxlint-disable-next-line react/immutability
@@ -1274,9 +1330,19 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         collision = playerBounds.intersectsBox(obstacleBounds)
       } else {
         const px = player.current.position.x
+        const py = player.current.position.y
         const pz = player.current.position.z
+        const horizontalGap = Math.max(Math.abs(px - obstacle.x) - 0.7, 0)
+        const verticalGap = Math.max(Math.abs(py - (GROUND_Y + 0.45)) - 0.45, 0)
+        const depthGap = Math.max(Math.abs(pz - obstacle.z) - 0.7, 0)
+        nearMissDistance = Math.hypot(horizontalGap, verticalGap, depthGap)
+        passedPlayer = obstacle.z > playerBounds.max.z
         pickupHit = Math.abs(px - obstacle.x) < 0.75 && Math.abs(pz - obstacle.z) < 0.85
         collision = Math.abs(px - obstacle.x) < 0.4 && Math.abs(pz - obstacle.z) < 0.4
+      }
+
+      if (canTriggerNearMiss(obstacle.type)) {
+        obstacle.nearMissDistance = Math.min(obstacle.nearMissDistance ?? Infinity, nearMissDistance)
       }
       if (obstacle.type === 'milkBowl' && pickupHit) {
         playMilkSound()
@@ -1302,6 +1368,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       }
       if (flightModeRef.current || rocketActive) continue
       if (invincibleTime > 0 || playerStats.current.invincibleUntil > state.clock.elapsedTime) continue
+      if (collision) obstacle.nearMissCollided = true
       if (collision && state.clock.elapsedTime - playerStats.current.lastHitTime > 1.5) {
         if (obstacle.type === 'mousetrap') playMouseTrapSound()
         particleEmitter.emitImpactBurst(player.current.position.x, player.current.position.y + 0.25, player.current.position.z, obstacle.type)
@@ -1311,12 +1378,27 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         onCaught(score.current, obstacle.type === 'mousetrap')
         break
       }
+
+      if (
+        passedPlayer &&
+        !obstacle.nearMissChecked &&
+        !obstacle.nearMissCollided &&
+        canTriggerNearMiss(obstacle.type)
+      ) {
+        obstacle.nearMissChecked = true
+        if ((obstacle.nearMissDistance ?? Infinity) <= NEAR_MISS_DISTANCE && nearMissRef.current.cooldown <= 0) {
+          nearMissRef.current.remaining = NEAR_MISS_DURATION
+          nearMissRef.current.cooldown = NEAR_MISS_COOLDOWN
+          nearMissRef.current.seed = state.clock.elapsedTime * 17.31 + obstacle.x * 3.7
+          playSwooshSound()
+        }
+      }
     }
   })
 
   return (
     <>
-      <Camera isCaught={isCaught} cinematic={cinematic} flightActive={rocketActive} />
+      <Camera isCaught={isCaught} cinematic={cinematic} flightActive={rocketActive} nearMissRef={nearMissRef} />
       <GraphicsQualityManager quality={highQuality ? 'high' : 'low'} />
       <Lighting theme={theme} highQuality={highQuality} />
       <SkyEnvironment active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />

@@ -7,6 +7,7 @@ import magnetSoundUrl from '../assets/music/magnet.mp3'
 import milkSoundUrl from '../assets/music/milk.wav'
 import mouseTrapSoundUrl from '../assets/music/mouse-trap.mp3'
 import rocketTakeSoundUrl from '../assets/music/rocket-take.wav'
+import swooshSoundUrl from '../assets/music/Swoosh.mp3'
 
 const SOUND_KEY = 'sound-enabled'
 const SFX_POOL_SIZE = 6
@@ -34,6 +35,7 @@ const soundPools = {
   milk: createSoundPool(milkSoundUrl, 0.65),
   mouseTrap: createSoundPool(mouseTrapSoundUrl, 0.7),
   rocketTake: createSoundPool(rocketTakeSoundUrl, 0.7),
+  swoosh: createSoundPool(swooshSoundUrl, 0.48, 2),
 }
 
 let unlocked = false
@@ -93,6 +95,10 @@ export function playCheeseCollectSound() {
 
 export function playRocketTakeSound() {
   playPooledSound('rocketTake')
+}
+
+export function playSwooshSound() {
+  playPooledSound('swoosh')
 }
 
 export function playMilkSound() {
