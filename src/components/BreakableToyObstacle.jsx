@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
+import { playSmashSound } from '../utils/audioManager'
 
 const BLOCKS = [
   { position: [-0.34, 0.26, 0], size: [0.5, 0.5, 0.5], color: '#ef4444' },
@@ -38,6 +39,7 @@ export default function BreakableToyObstacle({ position, obstacleRef }) {
 
     physics.active = true
     physics.age = 0
+    playSmashSound()
     physics.velocities = []
     physics.angular = []
 

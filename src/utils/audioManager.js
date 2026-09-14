@@ -8,6 +8,7 @@ import magnetSoundUrl from '../assets/music/magnet.mp3'
 import milkSoundUrl from '../assets/music/milk.wav'
 import mouseTrapSoundUrl from '../assets/music/mouse-trap.mp3'
 import rocketTakeSoundUrl from '../assets/music/rocket-take.wav'
+import smashSoundUrl from '../assets/music/smash.mp3'
 import swooshSoundUrl from '../assets/music/Swoosh.mp3'
 
 const SOUND_KEY = 'sound-enabled'
@@ -37,6 +38,7 @@ const soundPools = {
   milk: createSoundPool(milkSoundUrl, 0.65),
   mouseTrap: createSoundPool(mouseTrapSoundUrl, 0.7),
   rocketTake: createSoundPool(rocketTakeSoundUrl, 0.7),
+  smash: createSoundPool(smashSoundUrl, 0.7, 2),
   swoosh: createSoundPool(swooshSoundUrl, 0.48, 2),
   toyClatter: createSoundPool(mouseTrapSoundUrl, 0.48, 2),
   multiplier: createSoundPool(swooshSoundUrl, 0.62, 2),
@@ -112,6 +114,10 @@ export function playSwooshSound() {
 
 export function playToyClatterSound() {
   playPooledSound('toyClatter')
+}
+
+export function playSmashSound() {
+  playPooledSound('smash')
 }
 
 export function playMultiplierSound() {

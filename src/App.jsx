@@ -28,7 +28,6 @@ import {
   playMouseTrapSound,
   playRocketTakeSound,
   playSwooshSound,
-  playToyClatterSound,
   playMultiplierSound,
   playSugarRushSound,
   readSoundPreference,
@@ -1502,7 +1501,6 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         if (collision && !obstacle.toyBroken) {
           obstacle.toyBroken = true
           obstacle.object?.userData.triggerScatter?.()
-          playToyClatterSound()
         }
         continue
       }
