@@ -19,6 +19,7 @@ import ParticleEffects from './components/ParticleEffects'
 import { particleEmitter } from './utils/particleEmitter'
 import {
   playCheeseCollectSound,
+  playButterSound,
   playFirstHitSound,
   playGameOverSound,
   playJumpSound,
@@ -403,7 +404,7 @@ function MenuDecor() {
   )
 }
 
-function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActive = false, flightModeRef, slidingRef, highQuality }) {
+function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActive = false, isSlipping = false, flightModeRef, slidingRef, highQuality }) {
   const mouseRef = useRef()
   const tailRef = useRef()
   const velocity = useRef(0)
@@ -463,7 +464,7 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActiv
         ducking.current = true
         setDuck(true)
       }
-      if (['a', 'd', 'arrowleft', 'arrowright'].includes(key)) {
+      if (['a', 'd', 'arrowleft', 'arrowright'].includes(key) && !isSlipping) {
         const direction = key === 'a' || key === 'arrowleft' ? -1 : 1
         targetX.current = Math.max(LANES[0], Math.min(LANES[2], targetX.current + direction * LANE_STEP))
       }
@@ -480,7 +481,7 @@ function Mouse({ playerRef, active, cinematic, magnetActive = false, rocketActiv
       window.removeEventListener('keydown', move)
       window.removeEventListener('keyup', stopDuck)
     }
-  }, [active, playerRef, setDuck])
+  }, [active, isSlipping, playerRef, setDuck])
 
   useFrame((state, delta) => {
     if (!active || !mouseRef.current) return
@@ -791,6 +792,15 @@ function MagnetPickup({ position, obstacleRef }) {
   )
 }
 
+function ButterHazard({ position, obstacleRef }) {
+  return (
+    <mesh ref={obstacleRef} position={[position[0], position[1] + 0.03, position[2]]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <planeGeometry args={[1.6, 1.1]} />
+      <meshStandardMaterial color="#f5c542" roughness={0.12} metalness={0.15} flatShading />
+    </mesh>
+  )
+}
+
 function Obstacle({ type, position, obstacleRef, onRocket, highQuality }) {
   const materials = useMemo(() => ({
     mousetrap: '#d64545',
@@ -800,6 +810,7 @@ function Obstacle({ type, position, obstacleRef, onRocket, highQuality }) {
   }), [])
 
   if (type === 'empty') return null
+  if (type === 'butter') return <ButterHazard position={position} obstacleRef={obstacleRef} />
   if (type === 'yarn') return <Yarn position={position} obstacleRef={obstacleRef} />
   if (type === 'milkBowl') return <MilkBowl position={position} obstacleRef={obstacleRef} />
   if (type === 'vacuum') return <Vacuum position={position} obstacleRef={obstacleRef} />
@@ -868,6 +879,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
   )
   const refs = useRef([])
   const lastMultiplierSpawnTime = useRef(0)
+  const lastButterSpawnTime = useRef(0)
   useEffect(() => {
     items.forEach((item) => {
       item.nearMissDistance = Infinity
@@ -875,6 +887,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
       item.nearMissCollided = false
       item.toyBroken = false
       item.multiplierCollected = false
+      item.butterTriggered = false
     })
     obstaclesRef.current = items
     return () => { obstaclesRef.current = [] }
@@ -882,6 +895,24 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
 
   useFrame((state, delta) => {
     if (!active) return
+
+    if (state.clock.elapsedTime - lastButterSpawnTime.current >= 40) {
+      const butter = items.find((item) => item.z < playerRef.current.position.z - 30) || items[0]
+      let butterZ = playerRef.current.position.z - 80
+      while (
+        items.some((item) => item !== butter && Math.abs(item.z - butterZ) < OBSTACLE_SPAWN_GAP) ||
+        [...coinPositions.current.values()].some((coin) => Math.abs(coin.z - butterZ) < OBSTACLE_SPAWN_GAP)
+      ) butterZ -= OBSTACLE_SPAWN_GAP
+      // oxlint-disable-next-line react/immutability
+      butter.type = 'butter'
+      butter.x = randomLane()
+      butter.z = butterZ
+      butter.butterTriggered = false
+      butter.nearMissDistance = Infinity
+      butter.nearMissChecked = false
+      butter.nearMissCollided = false
+      lastButterSpawnTime.current = state.clock.elapsedTime
+    }
 
     items.forEach((item, index) => {
       const mesh = refs.current[index]
@@ -900,6 +931,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
         item.nearMissCollided = false
         item.toyBroken = false
         item.multiplierCollected = false
+        item.butterTriggered = false
         item.x = randomLane()
         item.vacuumDirection = Math.random() > 0.5 ? 1 : -1
         const type = chooseSpawnType()
@@ -923,7 +955,9 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
             : OVERHEAD_TYPES[Math.floor(Math.random() * OVERHEAD_TYPES.length)]
         }
       }
-      const y = item.type === 'yarn'
+      const y = item.type === 'butter'
+        ? GROUND_Y + 0.03
+        : item.type === 'yarn'
         ? GROUND_Y + 0.5
         : item.type === 'milkBowl'
           ? GROUND_Y + MILK_MODEL_CENTER_OFFSET
@@ -1341,13 +1375,14 @@ function Environment({ active, speedRef }) {
   )
 }
 
-function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseSpeed, maxSpeed, multiplier = 1, invincibleTime, magnetActive, sugarRushActive = false, rocketActive, highQuality, showFps, onFps, onScore, onCaught, onMilk, onMagnet, onRocket, onMultiplier, onCoin }) {
+function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseSpeed, maxSpeed, multiplier = 1, invincibleTime, isSlipping, magnetActive, sugarRushActive = false, rocketActive, highQuality, showFps, onFps, onScore, onCaught, onButter, onMilk, onMagnet, onRocket, onMultiplier, onCoin }) {
   const player = useRef()
   const cat = useRef()
   const obstacles = useRef([])
   const score = useRef(0)
   const lastScore = useRef(0)
   const currentSpeed = useRef(baseSpeed)
+  const movementSpeed = useRef(baseSpeed)
   const playerStats = useRef({ hits: 0, lastHitTime: 0, invincibleUntil: 0 })
   const slidingRef = useRef(false)
   const fpsElapsed = useRef(0)
@@ -1377,7 +1412,8 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
     if (isPaused || isCaught) return
     if (!active) return
     currentSpeed.current = Math.min(currentSpeed.current + delta * 0.4, maxSpeed)
-    score.current += delta * currentSpeed.current
+    movementSpeed.current = currentSpeed.current * (isSlipping ? 1.75 : 1)
+    score.current += delta * movementSpeed.current
     if (Math.floor(score.current) !== lastScore.current) {
       lastScore.current = Math.floor(score.current)
       onScore(lastScore.current)
@@ -1402,7 +1438,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         // Sweep the current obstacle box backward by this frame's travel to
         // prevent fast objects from tunneling through the player.
         // oxlint-disable-next-line react/immutability
-        obstacleBounds.min.z -= currentSpeed.current * delta
+        obstacleBounds.min.z -= movementSpeed.current * delta
         pickupHit = pickupBounds.intersectsBox(obstacleBounds)
         collision = playerBounds.intersectsBox(obstacleBounds)
       } else {
@@ -1452,6 +1488,15 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         }
         continue
       }
+      if (obstacle.type === 'butter') {
+        if (collision && !obstacle.butterTriggered) {
+          obstacle.butterTriggered = true
+          obstacle.z = 2
+          playButterSound()
+          onButter()
+        }
+        continue
+      }
       if (obstacle.type === 'toy') {
         if (collision && !obstacle.toyBroken) {
           obstacle.toyBroken = true
@@ -1495,11 +1540,11 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       <Camera isCaught={isCaught} cinematic={cinematic} flightActive={rocketActive} sugarRushActive={sugarRushActive} nearMissRef={nearMissRef} />
       <GraphicsQualityManager quality={highQuality ? 'high' : 'low'} />
       <Lighting theme={theme} highQuality={highQuality} />
-      <SkyEnvironment active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
-      <SideScenery active={active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} highQuality={highQuality} />
-      <Environment active={active && !isPaused && !isCaught} speedRef={currentSpeed} />
+      <SkyEnvironment active={active && !isPaused && !isCaught} speedRef={movementSpeed} theme={theme} />
+      <SideScenery active={active && !isPaused && !isCaught} speedRef={movementSpeed} theme={theme} highQuality={highQuality} />
+      <Environment active={active && !isPaused && !isCaught} speedRef={movementSpeed} />
       {cinematic && <MenuDecor />}
-      <AtmosphericParticles active={highQuality && active && !isPaused && !isCaught} speedRef={currentSpeed} theme={theme} />
+      <AtmosphericParticles active={highQuality && active && !isPaused && !isCaught} speedRef={movementSpeed} theme={theme} />
       <ParticleEffects active={highQuality && active && !isPaused} />
       <FlightSpeedStreaks active={highQuality && rocketActive} />
       <Mouse
@@ -1508,6 +1553,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
         cinematic={cinematic}
         magnetActive={magnetActive}
         rocketActive={rocketActive}
+        isSlipping={isSlipping}
         flightModeRef={flightModeRef}
         slidingRef={slidingRef}
         highQuality={highQuality}
@@ -1516,7 +1562,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       <Obstacles
         active={active && !isPaused}
         obstaclesRef={obstacles}
-        speedRef={currentSpeed}
+        speedRef={movementSpeed}
         playerRef={player}
         coinPositions={coinPositions}
         cheeseRequests={cheeseRequests}
@@ -1525,7 +1571,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       />
       <CoinSpawner
         active={active && !isPaused && !isCaught}
-        speedRef={currentSpeed}
+        speedRef={movementSpeed}
         obstaclesRef={obstacles}
         playerRef={player}
         positionsRef={coinPositions}
@@ -1563,7 +1609,7 @@ function HighScore({ score, onBack }) {
   )
 }
 
-function UIOverlay({ score, coinCount, fps, showFps, soundEnabled, onToggleSound, graphicsQuality, onToggleGraphicsQuality, multiplier, multiplierTime, comboGauge, sugarRushTime, invincibleTime, magnetTime, rocketTime, isPaused, gameOver, onRestart, onMenu, onResume }) {
+function UIOverlay({ score, coinCount, fps, showFps, soundEnabled, onToggleSound, graphicsQuality, onToggleGraphicsQuality, multiplier, multiplierTime, comboGauge, sugarRushTime, invincibleTime, isSlipping, magnetTime, rocketTime, isPaused, gameOver, onRestart, onMenu, onResume }) {
   return (
     <div className="font-cartoon pointer-events-none absolute inset-0 select-none">
       <WindSpeedOverlay active={rocketTime > 0} />
@@ -1609,6 +1655,9 @@ function UIOverlay({ score, coinCount, fps, showFps, soundEnabled, onToggleSound
       
       {/* Active Power-up Badges */}
       <div className="absolute top-24 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2.5 pointer-events-none">
+        {isSlipping && (
+          <div className="rounded-2xl border-4 border-black bg-yellow-400 px-6 py-2 text-2xl font-black text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-pulse">🧈 SLIPPING!</div>
+        )}
         {invincibleTime > 0 && (
           <div className="bg-blue-500 border-4 border-black text-white font-black text-2xl sm:text-3xl px-6 py-2 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-bounce flex items-center gap-2">
             <span>🥛</span> MILK POWER: {invincibleTime}s
@@ -1698,6 +1747,7 @@ export default function App() {
   const [soundEnabled, setSoundEnabled] = useState(() => readSoundPreference())
   const [graphicsQuality, setGraphicsQuality] = useState(() => readGraphicsQuality())
   const [invincibleTime, setInvincibleTime] = useState(0)
+  const [isSlipping, setIsSlipping] = useState(false)
   const [magnetTime, setMagnetTime] = useState(0)
   const [rocketTime, setRocketTime] = useState(0)
   const [multiplier, setMultiplier] = useState(1)
@@ -1708,6 +1758,7 @@ export default function App() {
   const [isCaught, setIsCaught] = useState(false)
   const [theme, setTheme] = useState('day')
   const catchTimer = useRef()
+  const slipTimer = useRef()
   const [best, setBest] = useState(() => readBest())
   const [run, setRun] = useState(0)
   const [settings, setSettings] = useState(DIFFICULTIES.Easy)
@@ -1781,6 +1832,8 @@ export default function App() {
     setCoinCount(0)
     setFps(0)
     setInvincibleTime(0)
+    setIsSlipping(false)
+    clearTimeout(slipTimer.current)
     setMagnetTime(0)
     setRocketTime(0)
     setMultiplier(1)
@@ -1821,7 +1874,10 @@ export default function App() {
     }
   }
 
-  useEffect(() => () => clearTimeout(catchTimer.current), [])
+  useEffect(() => () => {
+    clearTimeout(catchTimer.current)
+    clearTimeout(slipTimer.current)
+  }, [])
 
   useEffect(() => {
     if (invincibleTime <= 0) return undefined
@@ -1949,6 +2005,7 @@ export default function App() {
           maxSpeed={settings.maxSpeed}
           multiplier={multiplier}
           invincibleTime={invincibleTime}
+          isSlipping={isSlipping}
           magnetActive={magnetTime > 0}
           sugarRushActive={sugarRushTime > 0}
           rocketActive={rocketTime > 0}
@@ -1957,6 +2014,11 @@ export default function App() {
           onFps={setFps}
           onScore={setScore}
           onCoin={handleCheeseCollected}
+          onButter={() => {
+            setIsSlipping(true)
+            clearTimeout(slipTimer.current)
+            slipTimer.current = setTimeout(() => setIsSlipping(false), 1500)
+          }}
           onMilk={() => setInvincibleTime(5)}
           onMagnet={() => setMagnetTime(8)}
           onRocket={() => setRocketTime(10)}
@@ -1993,6 +2055,7 @@ export default function App() {
         onToggleGraphicsQuality={toggleGraphicsQuality}
         invincibleTime={invincibleTime}
         magnetTime={magnetTime}
+        isSlipping={isSlipping}
         rocketTime={rocketTime}
         multiplier={multiplier}
         multiplierTime={multiplierTime}

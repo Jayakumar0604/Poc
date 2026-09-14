@@ -96,6 +96,10 @@ export function playCheeseCollectSound() {
   playPooledSound('butter')
 }
 
+export function playButterSound() {
+  playPooledSound('butter')
+}
+
 export function playRocketTakeSound() {
   playPooledSound('rocketTake')
 }
