@@ -7,7 +7,7 @@ let loadPromise = null
 
 const CHEESE_APPEARANCE = {
   normal: { color: '#f6c434', emissive: '#000000', emissiveIntensity: 0, metalness: 0.05, roughness: 0.45 },
-  blue: { color: '#168cff', emissive: '#0878ff', emissiveIntensity: 0.8, metalness: 0.12, roughness: 0.3 },
+  blue: { color: '#f97316', emissive: '#ea580c', emissiveIntensity: 0.35, metalness: 0.12, roughness: 0.3 },
   golden: { color: '#ffd12e', emissive: '#ff9700', emissiveIntensity: 0.35, metalness: 0.72, roughness: 0.24 },
 }
 

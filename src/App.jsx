@@ -60,13 +60,13 @@ const OBSTACLE_SPAWN_GAP = 5.5
 const NEAR_MISS_DISTANCE = 0.5
 const NEAR_MISS_DURATION = 0.3
 const NEAR_MISS_COOLDOWN = 1
-const COMBO_MAX = 100
-const COMBO_GAIN = 10
+const COMBO_MAX = 200
 const COMBO_DECAY_DELAY = 1.5
 const COMBO_DECAY_PER_TICK = 8
 const SUGAR_RUSH_DURATION = 5
 const SUGAR_RUSH_CHROMATIC_OFFSET = new Vector2(0.0035, 0.0035)
 const INITIAL_CHEESE_REQUESTS = 4
+const COLLISION_BOX_SCALE = 0.8
 const CHEESE_TIERS = {
   normal: { points: 5 },
   blue: { points: 10 },
@@ -97,6 +97,18 @@ const DIFFICULTIES = {
 const readBest = () => Number(localStorage.getItem(KEY)) || 0
 const readFpsPreference = () => localStorage.getItem(FPS_KEY) !== 'false'
 const readGraphicsQuality = () => localStorage.getItem(GRAPHICS_QUALITY_KEY) === 'low' ? 'low' : 'high'
+const shrinkBox = (box, scale = COLLISION_BOX_SCALE) => {
+  const x = (box.max.x - box.min.x) * (1 - scale) / 2
+  const y = (box.max.y - box.min.y) * (1 - scale) / 2
+  const z = (box.max.z - box.min.z) * (1 - scale) / 2
+  box.min.x += x
+  box.min.y += y
+  box.min.z += z
+  box.max.x -= x
+  box.max.y -= y
+  box.max.z -= z
+  return box
+}
 const distanceBetweenBoxes = (first, second) => {
   const dx = Math.max(first.min.x - second.max.x, second.min.x - first.max.x, 0)
   const dy = Math.max(first.min.y - second.max.y, second.min.y - first.max.y, 0)
@@ -843,6 +855,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
     [],
   )
   const refs = useRef([])
+  const lastMultiplierSpawnTime = useRef(0)
   useEffect(() => {
     items.forEach((item) => {
       item.nearMissDistance = Infinity
@@ -855,7 +868,7 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
     return () => { obstaclesRef.current = [] }
   }, [items, obstaclesRef])
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     if (!active) return
 
     items.forEach((item, index) => {
@@ -889,8 +902,9 @@ function Obstacles({ obstaclesRef, active, speedRef, playerRef, coinPositions, c
           item.type = 'rocket'
         } else if (type === 'toy') {
           item.type = 'toy'
-        } else if (type === 'multiplier') {
+        } else if (type === 'multiplier' && state.clock.elapsedTime - lastMultiplierSpawnTime.current >= 30) {
           item.type = chooseMultiplierType()
+          lastMultiplierSpawnTime.current = state.clock.elapsedTime
         } else {
           item.type = Math.random() < 0.65
             ? MOVING_TYPES[Math.floor(Math.random() * MOVING_TYPES.length)]
@@ -1169,10 +1183,15 @@ function CoinSpawner({ active, speedRef, obstaclesRef, playerRef, positionsRef, 
   useFrame((_, delta) => {
     if (!active) return
     timer.current -= delta
-    if (timer.current > 0 || (!rocketActive && cheeseRequests.current === 0)) return
+    if (timer.current > 0) return
+    if (!rocketActive && cheeseRequests.current === 0 && live.current.length === 0) {
+      // oxlint-disable-next-line react/immutability
+      cheeseRequests.current = 1
+    }
+    if (!rocketActive && cheeseRequests.current === 0) return
     const startDistance = rocketActive
       ? (live.current.length === 0 ? 6 : 24)
-      : (live.current.length === 0 ? 5 : 80)
+      : 80
     const line = makeCoinLine(obstaclesRef.current, positions.current, nextId, coinsSpawned, playerRef, startDistance, rocketActive)
     if (!line.length) return
     if (!rocketActive) {
@@ -1353,7 +1372,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
 
     if (!player.current) return
     player.current.updateMatrixWorld(true)
-    playerBounds.setFromObject(player.current)
+    shrinkBox(playerBounds.setFromObject(player.current))
     pickupBounds.copy(playerBounds).expandByScalar(0.28)
 
     for (const obstacle of obstacles.current) {
@@ -1363,7 +1382,7 @@ function GameScene({ active, isPaused, isCaught, cinematic = false, theme, baseS
       let passedPlayer = false
       if (obstacle.object) {
         obstacle.object.updateMatrixWorld(true)
-        obstacleBounds.setFromObject(obstacle.object)
+        shrinkBox(obstacleBounds.setFromObject(obstacle.object))
         nearMissDistance = distanceBetweenBoxes(playerBounds, obstacleBounds)
         passedPlayer = obstacleBounds.min.z > playerBounds.max.z
         // Sweep the current obstacle box backward by this frame's travel to
@@ -1543,12 +1562,12 @@ function UIOverlay({ score, coinCount, fps, showFps, soundEnabled, onToggleSound
       <div className="absolute right-5 top-[4.5rem] z-20 w-52 rounded-xl border border-[#fed23a]/30 bg-[#321c13]/90 p-2.5 shadow-lg backdrop-blur-sm sm:w-64">
         <div className="mb-1 flex items-center justify-between text-[0.7rem] font-black uppercase tracking-wider text-[#ffe7a3]">
           <span>🍬 Combo Gauge</span>
-          <span>{comboGauge}/100</span>
+          <span>{comboGauge}/{COMBO_MAX}</span>
         </div>
         <div className="h-3 overflow-hidden rounded-full border border-black/70 bg-black/40">
           <div
             className={`h-full rounded-full transition-[width] duration-100 ${sugarRushTime > 0 ? 'bg-gradient-to-r from-pink-400 via-yellow-300 to-white animate-pulse' : 'bg-gradient-to-r from-amber-500 to-pink-500'}`}
-            style={{ width: `${comboGauge}%` }}
+            style={{ width: `${(comboGauge / COMBO_MAX) * 100}%` }}
           />
         </div>
       </div>
@@ -1725,11 +1744,11 @@ export default function App() {
     comboLastCheeseAtRef.current = now
     if (sugarRushRef.current) return
 
-    const nextGauge = Math.min(COMBO_MAX, comboGaugeRef.current + COMBO_GAIN)
+    const nextGauge = Math.min(COMBO_MAX, comboGaugeRef.current + value)
     comboGaugeRef.current = nextGauge
     setComboGauge(nextGauge)
 
-    if (nextGauge >= COMBO_MAX) {
+    if (nextGauge === COMBO_MAX) {
       sugarRushRef.current = true
       sugarRushEndsAtRef.current = now + SUGAR_RUSH_DURATION * 1000
       setSugarRushTime(SUGAR_RUSH_DURATION)
